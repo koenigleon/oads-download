@@ -59,7 +59,10 @@ You can also download different product types with the same command and also use
 ```
 $ python oads_download.py ANOM:AC MRGR CNOM -oaf 2163E
 ```
-
+You can also specify only a timestamp within the frame, e.g. if you do not know the orbit and frame identifier in advance (the `--time`/`-t` option allows flexible timestamp string formats, like `202410142355`, `2024-10-14T23:55`, ...):
+```
+python oads_download.py ANOM:AC MRGR CNOM -t 2024-10-14T23:55
+```
 ### *Example 2: How can I select products within the radius of a ground site?*
 ```
 $ python oads_download.py ATL_EBD_2A --radius 100000 16.878 -24.995 --start_time 2025-01-20T00:00:00 --end_time 2025-01-28T00:00:00
