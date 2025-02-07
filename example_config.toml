@@ -1,0 +1,19 @@
+[Local_file_system]
+data_directory = ''
+
+[OADS_credentials]
+username = 'your_username'
+password = """your_password"""
+collections = [
+    'EarthCAREAuxiliary',     # EarthCARE Auxiliary Data for Cal/Val Users
+    'EarthCAREL2Validated',   # EarthCARE ESA L2 Products
+    'EarthCAREL2InstChecked', # EarthCARE ESA L2 Products for Cal/Val Users
+    'EarthCAREL2Products',    # EarthCARE ESA L2 Products for the Commissioning Team
+    'JAXAL2Validated',        # EarthCARE JAXA L2 Products
+    'JAXAL2InstChecked',      # EarthCARE JAXA L2 Products for Cal/Val Users
+    'JAXAL2Products',         # EarthCARE JAXA L2 Products for the Commissioning Team
+    'EarthCAREL0L1Products',  # EarthCARE L0 and L1 Products for the Commissioning Team
+    'EarthCAREL1Validated',   # EarthCARE L1 Products
+    'EarthCAREL1InstChecked', # EarthCARE L1 Products for Cal/Val Users
+    'EarthCAREOrbitData',     # EarthCARE Orbit Data
+]
