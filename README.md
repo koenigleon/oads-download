@@ -19,7 +19,9 @@ If you have questions please create an issue or contact koenig@tropos.de.
     - pandas
     - beautifulsoup4
     - lxml
-- Create a copy of the [example_config.toml](example_config.toml) file and rename it to `config.toml`. Enter your credentials as well as the path to your data folder and comment out all OADS data collections for which you do not have access authorizations.
+- Create a copy of the [example_config.toml](example_config.toml) file and rename it to `config.toml`. It should be located in the same directory as the script `oads_download.py`.
+- Enter your OADS credentials as well as the path to your desired data folder.
+- Comment out or remove all OADS data collections for which you do not have access authorizations. Otherwise you may not be able to download any data.
 
 ## Usage
 
@@ -61,7 +63,7 @@ $ python oads_download.py ANOM:AC MRGR CNOM -oaf 2163E
 ```
 You can also specify only a timestamp within the frame, e.g. if you do not know the orbit and frame identifier in advance (the `--time`/`-t` option allows flexible timestamp string formats, like `202410142355`, `2024-10-14T23:55`, ...):
 ```
-python oads_download.py ANOM:AC MRGR CNOM -t 2024-10-14T23:55
+$ python oads_download.py ANOM:AC MRGR CNOM -t 2024-10-14T23:55
 ```
 ### *Example 2: How can I select products within the radius of a ground site?*
 ```
@@ -69,7 +71,13 @@ $ python oads_download.py ATL_EBD_2A --radius 100000 16.878 -24.995 --start_time
 ```
 With this command the script downloads all ATL_EBD_2A products that are found within a 100 km radius around Mindelo CPV between the 20th and 28th of January 2025.
 
-### *Example 3: How can I first search for product candidates and then select a single product?*
+### *Example 3: How do I obtain data for an entire day?*
+```
+$ python oads_download.py AALD -st 20250101 -et 20250102
+```
+This command downloads all ATL_ALD_2A products for the day of January 1 2025 (125 files) by using the `--start_time`/`-st` and `--end_time`/`-et` options.
+
+### *Example 4: How can I first search for product candidates and then select a single product?*
 ```
 $ python oads_download.py XORBP -t 20250130 --no_download
 ```
@@ -97,6 +105,17 @@ To download a single file from this list you can specify its index like this:
 $ python oads_download.py XORBP -t 20250130 -i 4
 ```
 You can also use negative numbers, e.g. if you want to select the last file in the list (`-i -1`).
+
+### *Further examples: How to download orbit ranges?*
+Download all D and B frames from orbit 3000 to 3009 (20 files):
+```
+$ python oads_download.py AALD -f D B -so 3000 -eo 3009
+```
+
+Download all frames between 01300D and 01302B (15 files):
+```
+$ python oads_download.py AALD -soaf 01300D -eoaf 01302B
+```
 
 ## Table of product name aliases
 

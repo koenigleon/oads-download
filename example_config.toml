@@ -3,7 +3,8 @@ data_directory = ''
 
 [OADS_credentials]
 username = 'your_username'
-password = """your_password"""
+password = """your_password""" # use triple quotation marks to allow for special characters
+# You need to comment out or remove all collections to which you do not have access rights to
 collections = [
     'EarthCAREAuxiliary',     # EarthCARE Auxiliary Data for Cal/Val Users
     'EarthCAREL2Validated',   # EarthCARE ESA L2 Products

@@ -4,8 +4,8 @@
 Filename: oads_download.py
 Author: Leonard König
 Email: koenig@tropos.de
-Date: 2025-01-30
-Version: 2.5
+Date: 2025-02-21
+Version: 2.6
 Description:
     This is a Python script designed to download EarthCARE satellite
     data from the Online Access and Distribution System (OADS) using
@@ -34,12 +34,43 @@ import pandas as pd
 from bs4 import BeautifulSoup
 from lxml import html
 
+FRAMES = 'ABCDEFGH'
+NUM_FRAMES = len(FRAMES) # 8
+CHUNK_SIZE = 256 * 1024 # 256 KB
+MAX_NUM_RESULTS_PER_REQUEST = '2000' # needs to be a string
+
 class InvalidInputError(Exception): pass
 class BadResponseError(Exception): pass
 
 def validate_request_response(response):
-    # raise an for bad responses
-    response.raise_for_status()
+    response.raise_for_status() # raise an for bad responses
+
+format_orbit_and_frame = lambda o, f : str(o).zfill(5) + f.upper()
+
+def get_validated_orbit_number(orbit_number):
+    try:
+        orbit_number = int(orbit_number)
+        if orbit_number < 0 or orbit_number > 99999: raise InvalidInputError()
+    except:
+        raise InvalidInputError(f"{orbit_number} is not a valid orbit number. Valid orbit numbers are positive integers up to 5 digits.")
+    return orbit_number
+
+def get_validated_frame_id(frame_id):
+    try:
+        frame_id = frame_id.upper()
+        if len(frame_id) != 1: raise InvalidInputError()
+        if frame_id not in 'ABCDEFGH': raise InvalidInputError()
+    except:
+        raise InvalidInputError(f"{frame_id} is not a valid frame id. Valid frames are single letters from A to H.")
+    return frame_id
+
+def get_validated_orbit_and_frame(orbit_and_frame):
+    try:
+        orbit_number = int(orbit_and_frame[0:-1])
+        frame_id = orbit_and_frame[-1].upper()
+    except:
+        raise InvalidInputError(f"{orbit_and_frame} is not a valid orbit and frame name. Valid names contain the orbit number followed by the frame id letter (e.g. 3000B or 03000B).")
+    return orbit_number, frame_id
 
 def get_counter_message(counter = None, total_count = None):
     max_count_digits = len(str(total_count))
@@ -58,11 +89,11 @@ def unzip_file(filepath,
     count_msg, _ = get_counter_message(counter = counter, total_count = total_count)
 
     if not os.path.exists(filepath):
-        print(f'file not found: {filepath}')
+        print(f' {count_msg} File not found: {filepath}')
         return False
 
     # unzip zip file
-    print(f' {count_msg} Extracting...   {filepath}', end='\r')
+    print(f' {count_msg} Extracting...', end='\r')
     new_filepath = os.path.join(os.path.dirname(filepath),
                                 os.path.basename(filepath).split('.')[0])
     try:
@@ -73,7 +104,7 @@ def unzip_file(filepath,
             os.remove(filepath)
             print(f' {count_msg} Unzip failed! ZIP-file was deleted.')
         else:
-            print(f' {count_msg} Unzip failed!')
+            print(f' {count_msg} Unzip failed! ({filepath})')
         return False
 
     # delete zip file
@@ -81,7 +112,7 @@ def unzip_file(filepath,
         os.remove(filepath)
         print(f' {count_msg} File extracted and ZIP-file deleted. (see {new_filepath})')
     else:
-        print(f' {count_msg} File extracted: (see {new_filepath})')
+        print(f' {count_msg} File extracted. (see {new_filepath})')
     
     return True
 
@@ -260,20 +291,16 @@ def load_dataframe(response):
 
 
 def get_api_request(template, os_querystring):
-    # Fill (URL) template with OpenSearch parameter values provided in os_querystring and return as short HTTP URL without empty parameters.
-
     # print("URL template: " + template)
 
     # Limitation: the OSDD may use a default namespace for OpenSearch instead of using "os".
     # We make a simple correction here allowing to use OpenSearch queryables without namespace in requests.
     # A more generic solution to obtain namespaces from the OSDD and compare them with user supplied namespaces is future work.
 
-    OS_NAMESPACE = 'os:'
+    os_namespace = 'os:'
 
     # perform substitutions in template
     for p in os_querystring:
-        # print("  .. replacing:", p, "by", os_querystring[p])
-        # template = re.sub('\{'+p+'.*?\}', os_querystring[p] , template)
         result = re.subn(r'\{' + p + r'.*?\}', os_querystring[p] , template)
         n = result[1]
         template = result[0]
@@ -282,20 +309,14 @@ def get_api_request(template, os_querystring):
                 print("ERROR: parameter " + p + " not found in template.")
             else:
                 # try with explicit namespace
-                result = re.subn(r'\{' + OS_NAMESPACE + p + r'.*?\}', os_querystring[p] , template)
+                result = re.subn(r'\{' + os_namespace + p + r'.*?\}', os_querystring[p] , template)
                 n = result[1]
                 template = result[0]
                 if (n < 1):
-                    print("ERROR: parameter " + OS_NAMESPACE + p + " not found in template.")   
-
-        # print("- intermediate new template:" + template)
+                    print("ERROR: parameter " + os_namespace + p + " not found in template.")   
 
     # remove empty search parameters
-    # template = re.sub('&?[a-zA-Z]*=\{.*?\}', '' , template)
     template = re.sub(r'&?[a-zA-Z]*=\{.*?\}', '' , template)
-
-
-    # print("- AFTER STEP 1 intermediate new template:" + template)
 
     # remove remaining empty search parameters which did not have an HTTP query parameter attached (e.g. /{time:end}).
     template = re.sub(r'.?\{.*?\}', '' , template)
@@ -382,11 +403,13 @@ def get_local_product_dirpath(dirpath_local, filename, create_subdirs=True):
         product_dirpath_local = dirpath_local
     return product_dirpath_local
 
-def download(dataframe, username, password, download_directory, is_override, is_unzip, is_delete, is_create_subdirs):
+def download(dataframe, username, password, download_directory, is_overwrite, is_unzip, is_delete, is_create_subdirs):
     total_count = len(dataframe)
     counter = 1
     download_counter = 0
     unzip_counter = 0
+    download_sizes = []
+    download_speeds = []
     for server, df_group in dataframe.groupby('server'):
         # 4 Product Download
 
@@ -499,8 +522,8 @@ def download(dataframe, username, password, download_directory, is_override, is_
                 file_exists = os.path.exists(file_path)
 
                 # plan next steps
-                try_download = is_override or (not zip_file_exists and not file_exists)
-                try_unzip = is_unzip and (is_override or not file_exists)
+                try_download = is_overwrite or (not zip_file_exists and not file_exists)
+                try_unzip = is_unzip and (is_overwrite or not file_exists)
 
                 if not try_download:
                     if is_unzip:
@@ -518,11 +541,11 @@ def download(dataframe, username, password, download_directory, is_override, is_
                     os.remove(zip_file_path)
                     zip_file_exists = False
 
-                # override files
-                if zip_file_exists and is_override:
+                # overwrite files
+                if zip_file_exists and is_overwrite:
                     os.remove(zip_file_path)
                     zip_file_exists = False
-                if file_exists and is_override:
+                if file_exists and is_overwrite:
                     os.remove(file_path)
                     file_exists = False
 
@@ -547,22 +570,36 @@ def download(dataframe, username, password, download_directory, is_override, is_
                                 total_length = int(total_length)
                                 start_time = time.time()
                                 progress_bar_length = 30
-                                for data in response.iter_content(chunk_size=128):
+                                for data in response.iter_content(chunk_size=CHUNK_SIZE): 
                                     current_length += len(data)
                                     f.write(data)
                                     done = int(progress_bar_length * current_length / total_length)
                                     time_elapsed = (time.time() - start_time)
                                     time_estimated = (time_elapsed/current_length) * total_length
                                     time_left = time.strftime("%H:%M:%S", time.gmtime(int(time_estimated - time_elapsed)))
-                                    progress_bar = f"[{'=' * done}{' ' * (progress_bar_length - done)}]"
+                                    progress_bar = f"[{'#' * done}{'-' * (progress_bar_length - done)}]"
                                     progress_percentage = f"{str(int((current_length / total_length) * 100)).rjust(3)}%"
-                                    print(f"\r {count_msg} {progress_bar} {progress_percentage} - estimated time remaining {time_left}", end='')
+                                    elapsed_time = time.time() - start_time
+                                    size_done = current_length / 1024 / 1024
+                                    size_total = total_length / 1024 / 1024
+                                    speed = size_done / elapsed_time if elapsed_time > 0 else 0  # MB/s
+                                    print(f"\r {count_msg} {progress_percentage} {progress_bar} {time_left} - {speed:.2f} MB/s - {size_done:.2f}/{size_total:.2f} MB", end='')
                                 time_taken = time.strftime("%H:%M:%S", time.gmtime(int(time.time() - start_time)))
-                                print(f" - completed - time taken {time_taken}")
+                                print(f"\r {count_msg} Download completed ({time_taken} - {speed:.2f} MB/s - {size_done:.2f}/{size_total:.2f} MB)                   ")
+                                download_sizes.append(size_total)
+                                download_speeds.append(speed)
                                 download_counter += 1
                     except requests.exceptions.RequestException as e:
-                        print(f" {count_msg} Download failed! Attempt {attempt + 1}/{max_retries}. Error: {e}")
-                        time.sleep(2)  # wait for 2 seconds before retrying
+                        is_error_403_forbidden = False
+                        if e.response is not None:  # Ensure response exists
+                            is_error_403_forbidden = e.response.status_code == 403
+                        if is_error_403_forbidden:
+                            attempt = max_retries
+                            print(f" {count_msg} DOWNLOAD FAILED: {e}")
+                            print(f" {count_msg} Make sure that you only use OADS collections that you are allowed to access in your config.toml (see section 'Setup' in README)!")
+                        else:
+                            print(f" {count_msg} DOWNLOAD FAILED for attempt {attempt + 1} of {max_retries}: {e}")
+                            time.sleep(2)  # wait for 2 seconds before retrying
 
                     download_success = os.path.exists(zip_file_path)
                     success &= download_success
@@ -583,7 +620,7 @@ def download(dataframe, username, password, download_directory, is_override, is_
                     counter += 1
                     break
 
-        # logout of Authentication platform and OADS
+        # logout of authentication platform and OADS
         logout_1 = requests.get(f'https://{oads_hostname}/oads/Shibboleth.sso/Logout',
                                 proxies=proxies,
                                 stream=True)
@@ -592,7 +629,10 @@ def download(dataframe, username, password, download_directory, is_override, is_
                                 proxies=proxies,
                                 stream=True)
     
-    return download_counter, unzip_counter
+    total_download_size = 0 if len(download_sizes) == 0 else np.sum(download_sizes)
+    mean_download_speed = 0 if len(download_speeds) == 0 else np.mean(download_speeds)
+
+    return download_counter, unzip_counter, mean_download_speed, total_download_size
 
 def get_product_search_template(collection_identifier):
 
@@ -630,7 +670,7 @@ def get_product_search_template(collection_identifier):
 
     # extract total results
     el = root.find('{http://a9.com/-/spec/opensearch/1.1/}totalResults')
-#    print('totalResults: ', el.text)  #@ number of collections
+    # print('totalResults: ', el.text)  #@ number of collections
 
     dataframe = load_dataframe(response)
     
@@ -740,6 +780,14 @@ def drop_duplicate_files(df, filename_column):
 
     return df.reset_index(drop=True)
 
+def get_frame_range(start_frame_id, end_frame_id):
+    start_idx = FRAMES.index(start_frame_id)
+    end_idx = FRAMES.index(end_frame_id)
+    if end_idx < start_idx:
+        end_idx = end_idx + NUM_FRAMES
+    frame_id_range = [FRAMES[idx % NUM_FRAMES] for idx in np.arange(start_idx, end_idx + 1)]
+    return frame_id_range
+
 def oads_download(
     product_types,
     path_to_data = None,
@@ -754,50 +802,132 @@ def oads_download(
     is_download = None,
     is_unzip = None,
     is_delete = None,
-    is_override = None,
+    is_overwrite = None,
     is_create_subdirs = None,
     product_version = None,
     path_to_config = None,
     download_idx = None,
+    start_orbit_number = None,
+    end_orbit_number = None,
+    start_orbit_and_frame = None,
+    end_orbit_and_frame = None,
 ):
+    if ((start_orbit_and_frame is not None or end_orbit_and_frame is not None) and
+        (start_orbit_number is not None or end_orbit_number is not None or orbit_numbers is not None or frame_ids is not None)):
+        raise InvalidInputError(f"Options to select a range of obit and frame names (-soaf, -eoaf) can not be used in combination with the options to select only a range of orbits (-o, -so, -eo) or single frames (-f).")
     
     product_types, product_versions = zip(*[get_product_type_and_version_from_string(pn) for pn in product_types])
     product_types, product_versions = list(product_types), list(product_versions)
-    # if option '--product_version' is used, all search products should have the specified version 
+
+    # if option '--product_version' is used, all products without explicitly specified baseline in its name (eg. ANOM:AC) will be set to this 
     if product_version is not None:
-        product_versions = [product_version] * len(product_types)
+        product_versions = [product_version if pv == 'latest' else pv for pv in product_versions]
     
     if timestamps is not None:
         timestamps = [format_datetime_string(t) for t in timestamps]
 
+    # handle input of frame ids
+    frame_ids_list = None
     if frame_ids is not None:
         tmp_frame_ids = []
         for f in frame_ids:
-            if f not in 'ABCDEFGH':
-                raise Exception(f"invalid frame ID '{f}'")
+            f = get_validated_frame_id(f)
+            if f not in FRAMES:
+                raise InvalidInputError(f"invalid frame ID '{f}'")
             else:
                 tmp_frame_ids.append(f)
         frame_ids = tmp_frame_ids
+        frame_ids_list = tmp_frame_ids
+        is_all_frames = len([f for f in FRAMES if f not in frame_ids_list]) == 0
+        if is_all_frames:
+            print("!!! --- WARNING ------------------------------------------------------------ !!!")
+            print("!!! You used the --frame_id/-f option with all frames (A to H).              !!!")
+            print("!!! If you want to download all frame IDs you don't need to use this option. !!!")
+            print("!!! ------------------------------------------------------------------------ !!!")
+            frame_ids = None
+            frame_ids_list = None
 
-    orbit_number_text = None
+    # handle input of orbit numbers
+    tmp_orbit_numbers = None
+    if (start_orbit_number is None and end_orbit_number is not None):
+        raise InvalidInputError(f"End orbit was given ({end_orbit_number}) but start is missing.")
+    elif (start_orbit_number is not None and end_orbit_number is None):
+        raise InvalidInputError(f"Start orbit was given ({start_orbit_number}) but end is missing.")
+    elif start_orbit_number is not None and end_orbit_number is not None:
+        if start_orbit_number > end_orbit_number:
+            raise InvalidInputError(f"Start orbit ({start_orbit_number}) must be smaller than end orbit ({end_orbit_number}).")
+        orbit_number_range = np.arange(start_orbit_number, end_orbit_number + 1)
+        tmp_orbit_numbers = orbit_number_range
+
     if orbit_numbers is not None:
-        orbit_numbers = [int(o) for o in orbit_numbers]
-        orbit_number_text = '[' + ','.join([str(o) for o in orbit_numbers]) + ']'
+        if tmp_orbit_numbers is not None:
+            tmp_orbit_numbers = np.append(tmp_orbit_numbers, orbit_numbers)
+        else:
+            tmp_orbit_numbers = orbit_numbers
+        tmp_orbit_numbers = [int(o) for o in np.sort(tmp_orbit_numbers)]
+
+    # handle input of orbit and frame names
+    _start_frame = None
+    _end_frame = None
+    _orbit_range = None
+    orbit_and_frames_list = []
+    if (start_orbit_and_frame is None and end_orbit_and_frame is not None):
+        raise InvalidInputError(f"End orbit and frame was given ({end_orbit_and_frame}) but start is missing.")
+    elif (start_orbit_and_frame is not None and end_orbit_and_frame is None):
+        raise InvalidInputError(f"Start orbit and frame was given ({start_orbit_and_frame}) but end is missing.")
+    elif start_orbit_and_frame is not None and end_orbit_and_frame is not None:
+        _start_orbit_number = int(start_orbit_and_frame[0:-1])
+        _start_frame = start_orbit_and_frame[-1].upper()
+        _end_orbit_number = int(end_orbit_and_frame[0:-1])
+        _end_frame = end_orbit_and_frame[-1].upper()
+        _orbit_range = np.arange(_start_orbit_number, _end_orbit_number + 1)
+        orbit_and_frame_range = []
+        if len(_orbit_range) == 1:
+            for f in get_frame_range(_start_frame, _end_frame):
+                oaf = format_orbit_and_frame(_orbit_range[0], f)
+                orbit_and_frame_range.append(oaf)
+        else:
+            for f in get_frame_range(_start_frame, 'H'):
+                oaf = format_orbit_and_frame(_orbit_range[0], f)
+                orbit_and_frame_range.append(oaf)
+            for f in get_frame_range('A', _end_frame):
+                oaf = format_orbit_and_frame(_orbit_range[-1], f)
+                orbit_and_frame_range.append(oaf)
+        orbit_and_frames_list = orbit_and_frame_range
+
+        if len(_orbit_range) >= 3:
+            tmp_orbit_numbers = _orbit_range[1:-1]
+            frame_ids_list = None
 
     if orbit_and_frames is not None:
         for i, oaf in enumerate(orbit_and_frames):
-            _orbit_number = int(oaf[0:-1])
-            _frame = oaf[-1].upper()
-            format_orbit_and_frame = lambda o, f : str(o).zfill(5) + f.upper()
+            _orbit_number, _frame = get_validated_orbit_and_frame(oaf)
             oaf = format_orbit_and_frame(_orbit_number, _frame)
             if _frame not in 'ABCDEFGH':
                 raise Exception(f"invalid frame ID '{oaf}'")
             orbit_and_frames[i] = oaf
+        orbit_and_frames_list = sorted(set(orbit_and_frames_list + orbit_and_frames))
+
+    if len(orbit_and_frames_list) == 0:
+        orbit_and_frames_list = None
+
+    orbit_number_text = None
+    if tmp_orbit_numbers is not None:
+        orbit_number_text = '[' + ','.join([str(get_validated_orbit_number(o)) for o in tmp_orbit_numbers]) + ']'
 
     if start_time is not None:
         start_time = format_datetime_string(start_time)
     if end_time is not None:
         end_time = format_datetime_string(end_time)
+
+    if timestamps is not None:
+        for t in timestamps:
+            if start_time is not None:
+                if t < start_time:
+                    raise InvalidInputError(f"Timestamp ({t}) must be greater or equal the start time ({start_time}).")
+            if end_time is not None:
+                if t > end_time:
+                    raise InvalidInputError(f"Timestamp ({t}) must be smaller or equal the end time ({end_time}).")
 
     radius_text = None
     lat_text = None
@@ -822,18 +952,13 @@ def oads_download(
     f' - product_types : {product_types}',
     f' - product_versions : {product_versions}',
     f' - path_to_data : {path_to_data}',
-    f' - timestamp : {timestamps}',
-    f' - start_time : {start_time}',
-    f' - end_time : {end_time}',
+    f' - timestamp : {timestamps}, start_time : {start_time}, end_time : {end_time}',
     f' - frame_id : {frame_ids}',
-    f' - orbit_numbers : {orbit_numbers}',
-    f' - orbit_and_frame : {orbit_and_frames}',
+    f' - orbit_numbers : {orbit_numbers}, start_orbit_number : {start_orbit_number}, end_orbit_number : {end_orbit_number}',
+    f' - orbit_and_frame : {orbit_and_frames}, start_orbit_and_frame : {start_orbit_and_frame}, end_orbit_and_frame : {end_orbit_and_frame}',
     f' - radius_search : {radius_search}',
     f' - bounding_box : {bounding_box}',
-    f' - is_download : {is_download}',
-    f' - is_unzip : {is_unzip}',
-    f' - is_delete : {is_delete}',
-    f' - is_override : {is_override}',
+    f' - is_download : {is_download}, is_unzip : {is_unzip}, is_delete : {is_delete}, is_overwrite : {is_overwrite}',
     f' - product_version : {product_version}',
     f' - path_to_config : {path_to_config}',
     ]))
@@ -902,20 +1027,20 @@ def oads_download(
                     bbox=None
                 )
                 planned_requests.append(new_request)
-        elif frame_ids is not None:
-            for f in frame_ids:
+
+        if orbit_and_frames_list is not None:
+            if _orbit_range is not None and orbit_number_text is not None:
                 new_request = dict(
                     **type_and_version,
                     collection_identifier_list=collection_identifier_list,
                     start_time=start_time,
                     end_time=end_time,
                     orbit_number=orbit_number_text,
-                    frame_id=f,
+                    frame_id=None,
                     **radius_and_bbox
                 )
                 planned_requests.append(new_request)
-        elif orbit_and_frames is not None:
-            for oaf in orbit_and_frames:
+            for oaf in orbit_and_frames_list:
                 _frame = oaf[-1]
                 _orbit = int(oaf[0:-1]) 
                 new_request = dict(
@@ -928,7 +1053,20 @@ def oads_download(
                     **radius_and_bbox
                 )
                 planned_requests.append(new_request)
-        else:
+
+        if frame_ids_list is not None:
+            for f in frame_ids_list:
+                new_request = dict(
+                    **type_and_version,
+                    collection_identifier_list=collection_identifier_list,
+                    start_time=start_time,
+                    end_time=end_time,
+                    orbit_number=orbit_number_text,
+                    frame_id=f,
+                    **radius_and_bbox
+                )
+                planned_requests.append(new_request)
+        if len(planned_requests) == 0:
             new_request = dict(
                 **type_and_version,
                 collection_identifier_list=collection_identifier_list,
@@ -977,7 +1115,7 @@ def oads_download(
     for request_ixd, pr in enumerate(planned_requests):
         pr['collection_identifier_list'] = [c for c in pr['collection_identifier_list'] if c in set(selected_collections)]
         filtered_pr = {k: v for k, v in pr.items() if v is not None}
-        print(f'Start search request #{request_ixd+1}: {filtered_pr}')
+        print(f'Start search request {request_ixd+1} of {len(planned_requests)}: {filtered_pr}')
         collection_identifier_list = pr['collection_identifier_list']
         if len(collection_identifier_list) == 0:
             print(f' - WARNING! No collection was selected. Please make sure that you have added the appropriate collections for this product in the configuration file and that you are allowed to access to them.')
@@ -986,7 +1124,7 @@ def oads_download(
             dataframe = get_product_list(template,
                                         product_id_text = None,
                                         sort_by_text = None,
-                                        num_results_text = '1000',
+                                        num_results_text = MAX_NUM_RESULTS_PER_REQUEST,
                                         start_time_text = pr['start_time'],
                                         end_time_text = pr['end_time'],
                                         poi_text = None,
@@ -1014,12 +1152,17 @@ def oads_download(
     
     total_results = len(dataframe)
     if total_results > 0:
+        dataframe = drop_duplicate_files(dataframe, 'dc:identifier')
+        dataframe = dataframe.sort_values(by='dc:identifier')
         print('Files found:')
         for idx, file in enumerate(dataframe['dc:identifier'].to_numpy()):
             print(f" - {str(idx+1).rjust(len(str(total_results)))} : {file}")
         print(f'Total: {total_results}')
         if download_idx is not None:
-            dataframe = dataframe.iloc[[download_idx]]
+            try:
+                dataframe = dataframe.iloc[[download_idx]]
+            except IndexError:
+                raise InvalidInputError(f"The index you selected exceeds the bounds of the found files list (1 - {total_results})")
             print(f'Selecting index {download_idx}:')
             print(f" - {dataframe['dc:identifier'].to_numpy()[0]}")
     else:
@@ -1031,20 +1174,24 @@ def oads_download(
     print("-"*60)
     download_counter = 0
     unzip_counter = 0
+    mean_download_speed = 0
+    total_download_size = 0
     if is_download:
         if len(dataframe) == 0:
             print(f'No products matching the request could be found on the server')
         else:
-            download_counter, unzip_counter = download(
+            download_counter, unzip_counter, mean_download_speed, total_download_size = download(
                 dataframe,
                 username,
                 password,
                 path_to_data,
-                is_override,
+                is_overwrite,
                 is_unzip,
                 is_delete,
                 is_create_subdirs
             )
+    else:
+        print(f'Skipped since option --no_download was used')
     
     time_end_script = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print()
@@ -1052,7 +1199,10 @@ def oads_download(
     print("-"*60)
     print("Summary:")
     print(f" - Execution time : {pd.Timestamp(time_end_script) - pd.Timestamp(time_start_script)}")
-    print(f" - Files downloaded : {download_counter}")
+    size_msg = f"{total_download_size:.2f} MB"
+    if total_download_size >= 1024:
+        size_msg = f"{total_download_size / 1024:.2f} GB"
+    print(f" - Files downloaded : {download_counter} ({size_msg} at ~{mean_download_speed:.2f} MB/s)")
     print(f" - Files unzipped : {unzip_counter}")
 
 if __name__ == "__main__":
@@ -1062,13 +1212,13 @@ from ESA's Online Access and Distribution System (OADS).
 A configuration file containing your OADS credentials is required to use it.
 If you don't have one yet, simply create a file called 'config.toml'
 in the script's folder and enter the following content:
-───config.toml─────────────────────────────────────────────────────────────────────────
+───config.toml───────────────────────────────────────────────────────────────────────────────────
 [Local_file_system]
 data_directory = ''
 [OADS_credentials]
 username = 'your_username'
-password = \"\"\"your_password\"\"\" # use triple single-quote delimiters
-# Please comment out all collections to which you do not have access rights to
+password = \"\"\"your_password\"\"\" # use triple quotation marks to allow for special characters
+# You need to comment out or remove all collections to which you do not have access rights to
 collections = [
     'EarthCAREAuxiliary',     # EarthCARE Auxiliary Data for Cal/Val Users
     'EarthCAREL2Validated',   # EarthCARE ESA L2 Products
@@ -1082,7 +1232,7 @@ collections = [
     'EarthCAREL1InstChecked', # EarthCARE L1 Products for Cal/Val Users
     'EarthCAREOrbitData',     # EarthCARE Orbit Data
 ]
-───────────────────────────────────────────────────────────────────────────────────────
+─────────────────────────────────────────────────────────────────────────────────────────────────
 Recommodations: If you want to check the search results first, use the '--no_download' option.
                 This way no data is downloaded yet. Also if you are looking for only one specific
                 file you may also use the '--select_file_at_index' option to download only one
@@ -1105,6 +1255,14 @@ Recommodations: If you want to check the search results first, use the '--no_dow
                         nargs = '*',
                         default = None,
                         help = "A list of EarthCARE orbit numbers (e.g. 981)")
+    parser.add_argument("-so", "--start_orbit_number",
+                        type = int,
+                        default = None,
+                        help = "Start of orbit number range (e.g. 981). Can only be used in combination with option -eo.")
+    parser.add_argument("-eo", "--end_orbit_number",
+                        type = int,
+                        default = None,
+                        help = "End of orbit number range (e.g. 986). Can only be used in combination with option -so.")
     parser.add_argument("-f", "--frame_id",
                         type = str,
                         nargs = '*',
@@ -1115,19 +1273,27 @@ Recommodations: If you want to check the search results first, use the '--no_dow
                         nargs = '*',
                         default = None,
                         help = "A string describing the EarthCARE orbit number and frame (e.g. 00981E)")
+    parser.add_argument("-soaf", "--start_orbit_and_frame",
+                        type = str,
+                        default = None,
+                        help = "Start orbit number and frame range (e.g. 00981E). Can only be used in combination with option -eoaf. Can not be used with separate orbit and frame options -o, -so, eo and -f.")
+    parser.add_argument("-eoaf", "--end_orbit_and_frame",
+                        type = str,
+                        default = None,
+                        help = "End orbit number and frame range (e.g. 00982B). Can only be used in combination with option -soaf. Can not be used with separate orbit and frame options -o, -so, eo and -f.")
     parser.add_argument("-t", "--time",
                         type = str,
                         nargs = '*',
                         default = None,
-                        help = 'Search for data containing a specific timestamp (e.g. "2024-07-31 13:45" or "20240731T134500Z")')
+                        help = 'Search for data containing a specific timestamp (e.g. "2024-07-31 13:45" or 20240731T134500Z)')
     parser.add_argument("-st", "--start_time",
                         type = str,
                         default = None,
-                        help = 'Start of sensing time (e.g. "2024-07-31 13:45" or "20240731T134500Z")')
+                        help = 'Start of sensing time (e.g. "2024-07-31 13:45" or 20240731T134500Z)')
     parser.add_argument("-et", "--end_time",
                         type = str,
                         default = None,
-                        help = 'End of sensing time (e.g. "2024-07-31 13:45" or "20240731T134500Z")')
+                        help = 'End of sensing time (e.g. "2024-07-31 13:45" or 20240731T134500Z)')
     parser.add_argument("-r", "--radius_search",
                         type = str,
                         nargs = 3,
@@ -1136,14 +1302,14 @@ Recommodations: If you want to check the search results first, use the '--no_dow
     parser.add_argument("-pv", "--product_version",
                         type = str,
                         default = None,
-                        help = 'Product version, i.e. the two-letter identifier of the processor baseline (e.g. "AC" or "latest")')
+                        help = 'Product version, i.e. the two-letter identifier of the processor baseline (e.g. AC)')
     parser.add_argument("-bbox", "--bounding_box",
                         type = str,
                         nargs = 4,
                         default = None,
                         help = "Perform search inside a bounding box (e.g. 14.9 37.7 14.99 37.78, i.e. <latS> <lonW> <latN> <lonE>)")
-    parser.add_argument("--override", action="store_true",
-                        help="Override local data (otherwise already locally existing data is not downloaded again)")
+    parser.add_argument("--overwrite", action="store_true",
+                        help="Overwrite local data (otherwise existing local data will not be downloaded again)")
     parser.add_argument("--no_download", action="store_false",
                         help="Do not download any data")
     parser.add_argument("--no_unzip", action="store_false",
@@ -1151,7 +1317,7 @@ Recommodations: If you want to check the search results first, use the '--no_dow
     parser.add_argument("--no_delete", action="store_false",
                         help="Do not delete zip files after unzipping them")
     parser.add_argument("--no_subdirs", action="store_false",
-                        help="Does not create subdirs like: data_directory/data_level/product_type/year/month/day")
+                        help="Do not create subdirs like: data_directory/data_level/product_type/year/month/day")
     parser.add_argument("-c", "--path_to_config",
                         type = str,
                         default = None,
@@ -1175,22 +1341,26 @@ Recommodations: If you want to check the search results first, use the '--no_dow
             raise InvalidInputError("The indices in the found files list start at 1.")
 
     oads_download(
-        product_types = args.product_type,
-        path_to_data = args.data_directory,
-        timestamps = args.time,
-        frame_ids = args.frame_id,
-        orbit_numbers = args.orbit_number,
-        orbit_and_frames = args.orbit_and_frame,
-        start_time = args.start_time,
-        end_time = args.end_time,
-        radius_search = args.radius_search,
-        bounding_box = args.bounding_box,
-        is_download = args.no_download,
-        is_unzip = args.no_unzip,
-        is_delete = args.no_delete,
-        is_override = args.override,
-        is_create_subdirs = args.no_subdirs,
-        product_version = args.product_version,
-        path_to_config = args.path_to_config,
+        product_types=args.product_type,
+        path_to_data=args.data_directory,
+        timestamps=args.time,
+        frame_ids=args.frame_id,
+        orbit_numbers=args.orbit_number,
+        orbit_and_frames=args.orbit_and_frame,
+        start_time=args.start_time,
+        end_time=args.end_time,
+        radius_search=args.radius_search,
+        bounding_box=args.bounding_box,
+        is_download=args.no_download,
+        is_unzip=args.no_unzip,
+        is_delete=args.no_delete,
+        is_overwrite=args.overwrite,
+        is_create_subdirs=args.no_subdirs,
+        product_version=args.product_version,
+        path_to_config=args.path_to_config,
         download_idx=args.select_file_at_index,
+        start_orbit_number=args.start_orbit_number,
+        end_orbit_number=args.end_orbit_number,
+        start_orbit_and_frame=args.start_orbit_and_frame,
+        end_orbit_and_frame=args.end_orbit_and_frame,
     )

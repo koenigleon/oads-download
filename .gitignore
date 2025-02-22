@@ -170,4 +170,19 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# Config file
 config.toml
+
+# Downloaded files
+*.ZIP
+*.zip
+*.h5
+*.HDR
+
+# Created directories
+*data/
+*L1/
+*L2a/
+*L2b/
+*Meteo_Supporting_Files/
+*Orbit_Data_Files/
