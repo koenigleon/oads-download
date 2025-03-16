@@ -186,3 +186,10 @@ config.toml
 *L2b/
 *Meteo_Supporting_Files/
 *Orbit_Data_Files/
+
+# Log files
+*logs/
+*.logs
+
+# Results file
+results.txt

@@ -10,6 +10,18 @@ User credentials are not required for the search part but are needed for the dow
 The code of this script is developed by Leonard König (TROPOS) based on a Jupyter notebook provided by ESA.
 If you have questions please create an issue or contact koenig@tropos.de.
 
+## Table of Contents
+- [Setup](https://github.com/koenigleon/oads-download?tab=readme-ov-file#setup)
+- [Usage](https://github.com/koenigleon/oads-download?tab=readme-ov-file#usage)
+    - [Logging](https://github.com/koenigleon/oads-download?tab=readme-ov-file#logging)
+    - [Examples](https://github.com/koenigleon/oads-download?tab=readme-ov-file#examples)
+        - [*How can I download specific frames?*](https://github.com/koenigleon/oads-download?tab=readme-ov-file#example-1-how-can-i-download-specific-frames)
+        - [*How can I select products within the radius of a ground site?*](https://github.com/koenigleon/oads-download?tab=readme-ov-file#example-2-how-can-i-select-products-within-the-radius-of-a-ground-site)
+        - [*How do I obtain data for an entire day?*](https://github.com/koenigleon/oads-download?tab=readme-ov-file#example-3-how-do-i-obtain-data-for-an-entire-day)
+        - [*How can I first search for product candidates and then select a single product?*](https://github.com/koenigleon/oads-download?tab=readme-ov-file#example-4-how-can-i-first-search-for-product-candidates-and-then-select-a-single-product)
+        - [*How to download orbit ranges?*](https://github.com/koenigleon/oads-download?tab=readme-ov-file#further-examples-how-to-download-orbit-ranges)
+- [Table of product name aliases](https://github.com/koenigleon/oads-download?tab=readme-ov-file#table-of-product-name-aliases)
+
 ## Setup
 
 - Make sure that you are using a Python environment with the following dependencies:
@@ -46,9 +58,18 @@ data_directory/
 ```
 To prevent this, the `--no_unzip` and `--no_subdirs` options can be used.
 
+### Logging
+
+On execution, log files are created which can be found in the logs folder.
+These can be used to trace the execution of the script in more detail than from the console.
+Logging can be disabled by using the `--no_log` option.
+By default, a maximum of 10 log files are created (older files are automatically deleted).
+
+### Examples
+
 Here are selected examples that illustrate some possible use cases.
 
-### *Example 1: How can I download specific frames?*
+#### *Example 1: How can I download specific frames?*
 To download the ATL_NOM_1B product for the orbit and frame 02163E you can run the command:
 ```
 $ python oads_download.py ATL_NOM_1B -oaf 2163E
@@ -65,19 +86,19 @@ You can also specify only a timestamp within the frame, e.g. if you do not know 
 ```
 $ python oads_download.py ANOM:AC MRGR CNOM -t 2024-10-14T23:55
 ```
-### *Example 2: How can I select products within the radius of a ground site?*
+#### *Example 2: How can I select products within the radius of a ground site?*
 ```
 $ python oads_download.py ATL_EBD_2A --radius 100000 16.878 -24.995 --start_time 2025-01-20T00:00:00 --end_time 2025-01-28T00:00:00
 ```
 With this command the script downloads all ATL_EBD_2A products that are found within a 100 km radius around Mindelo CPV between the 20th and 28th of January 2025.
 
-### *Example 3: How do I obtain data for an entire day?*
+#### *Example 3: How do I obtain data for an entire day?*
 ```
 $ python oads_download.py AALD -st 20250101 -et 20250102
 ```
 This command downloads all ATL_ALD_2A products for the day of January 1 2025 (125 files) by using the `--start_time`/`-st` and `--end_time`/`-et` options.
 
-### *Example 4: How can I first search for product candidates and then select a single product?*
+#### *Example 4: How can I first search for product candidates and then select a single product?*
 ```
 $ python oads_download.py XORBP -t 20250130 --no_download
 ```
@@ -86,27 +107,43 @@ This lists all AUX_ORBPRE files predicting the orbit on January 30 2025 without 
 The output shows a list of found products with indices:
 ```
 ...
-Files found:
- -  1 : ECA_EXAA_AUX_ORBPRE_20250120T000000Z_20250130T000000Z_0001
- -  2 : ECA_EXAA_AUX_ORBPRE_20250121T000000Z_20250131T000000Z_0001
- -  3 : ECA_EXAA_AUX_ORBPRE_20250122T000000Z_20250201T000000Z_0001
- -  4 : ECA_EXAA_AUX_ORBPRE_20250123T000000Z_20250202T000000Z_0001
- -  5 : ECA_EXAA_AUX_ORBPRE_20250124T000000Z_20250203T000000Z_0001
- -  6 : ECA_EXAA_AUX_ORBPRE_20250125T000000Z_20250204T000000Z_0001
- -  7 : ECA_EXAA_AUX_ORBPRE_20250126T000000Z_20250205T000000Z_0001
- -  8 : ECA_EXAA_AUX_ORBPRE_20250127T000000Z_20250206T000000Z_0001
- -  9 : ECA_EXAA_AUX_ORBPRE_20250128T000000Z_20250207T000000Z_0001
- - 10 : ECA_EXAA_AUX_ORBPRE_20250129T000000Z_20250208T000000Z_0001
- - 11 : ECA_EXAA_AUX_ORBPRE_20250130T000000Z_20250209T000000Z_0001
+List of files found (total number 11):
+ [ 1]  ECA_EXAA_AUX_ORBPRE_20250120T000000Z_20250130T000000Z_0001
+ [ 2]  ECA_EXAA_AUX_ORBPRE_20250121T000000Z_20250131T000000Z_0001
+ [ 3]  ECA_EXAA_AUX_ORBPRE_20250122T000000Z_20250201T000000Z_0001
+ [ 4]  ECA_EXAA_AUX_ORBPRE_20250123T000000Z_20250202T000000Z_0001
+ [ 5]  ECA_EXAA_AUX_ORBPRE_20250124T000000Z_20250203T000000Z_0001
+ [ 6]  ECA_EXAA_AUX_ORBPRE_20250125T000000Z_20250204T000000Z_0001
+ [ 7]  ECA_EXAA_AUX_ORBPRE_20250126T000000Z_20250205T000000Z_0001
+ [ 8]  ECA_EXAA_AUX_ORBPRE_20250127T000000Z_20250206T000000Z_0001
+ [ 9]  ECA_EXAA_AUX_ORBPRE_20250128T000000Z_20250207T000000Z_0001
+ [10]  ECA_EXAA_AUX_ORBPRE_20250129T000000Z_20250208T000000Z_0001
+ [11]  ECA_EXAA_AUX_ORBPRE_20250130T000000Z_20250209T000000Z_0001
+Note: To export this list use the option --export_results
+Note: To select only one specific file use the option -i/--select_file_at_index
 ...
 ```
-To download a single file from this list you can specify its index like this:
+To download a single file from this list you can specify its index. To select the last file set the index to -1:
 ```
-$ python oads_download.py XORBP -t 20250130 -i 4
+$ python oads_download.py XORBP -t 20250130 -i -1
+...
+List of files found (total number 11):
+ [ 1]  ECA_EXAA_AUX_ORBPRE_20250120T000000Z_20250130T000000Z_0001
+ [ 2]  ECA_EXAA_AUX_ORBPRE_20250121T000000Z_20250131T000000Z_0001
+ [ 3]  ECA_EXAA_AUX_ORBPRE_20250122T000000Z_20250201T000000Z_0001
+ [ 4]  ECA_EXAA_AUX_ORBPRE_20250123T000000Z_20250202T000000Z_0001
+ [ 5]  ECA_EXAA_AUX_ORBPRE_20250124T000000Z_20250203T000000Z_0001
+ [ 6]  ECA_EXAA_AUX_ORBPRE_20250125T000000Z_20250204T000000Z_0001
+ [ 7]  ECA_EXAA_AUX_ORBPRE_20250126T000000Z_20250205T000000Z_0001
+ [ 8]  ECA_EXAA_AUX_ORBPRE_20250127T000000Z_20250206T000000Z_0001
+ [ 9]  ECA_EXAA_AUX_ORBPRE_20250128T000000Z_20250207T000000Z_0001
+ [10]  ECA_EXAA_AUX_ORBPRE_20250129T000000Z_20250208T000000Z_0001
+<[11]> ECA_EXAA_AUX_ORBPRE_20250130T000000Z_20250209T000000Z_0001 <-- Select file (user input: -1)
+Note: To export this list use the option --export_results
+...
 ```
-You can also use negative numbers, e.g. if you want to select the last file in the list (`-i -1`).
 
-### *Further examples: How to download orbit ranges?*
+#### *Further examples: How to download orbit ranges?*
 Download all D and B frames from orbit 3000 to 3009 (20 files):
 ```
 $ python oads_download.py AALD -f D B -so 3000 -eo 3009
