@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+#
+# Copyright (C) 2025 TROPOS
+# This file is licensed under the Apache License, Version 2.0.
+# See the LICENSE file in the repository root for details.
+#
 __author__ = "Leonard König"
 __email__ = "koenig@tropos.de"
-__date__ = "2025-03-16"
-__version__ = "2.7"
+__date__ = "2025-03-27"
+__version__ = "2.7.1"
 __description__ = """This is a Python script designed to download EarthCARE satellite
 data from ESA's Online Access and Distribution System (OADS) using
 the OpenSearch API of the Earth Observation Catalogue (EO-CAT).
@@ -19,7 +24,10 @@ import time
 import argparse
 from argparse import RawTextHelpFormatter
 import datetime
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 from zipfile import ZipFile, BadZipFile
 from urllib.parse import urlparse
 from xml.etree import ElementTree
@@ -27,7 +35,7 @@ import logging
 from logging import Logger
 from dataclasses import dataclass
 from itertools import islice
-from typing import NewType, Final
+from typing import NewType, Final, TypeAlias
 
 import requests
 import numpy as np
@@ -36,9 +44,12 @@ from bs4 import BeautifulSoup
 from lxml import html
 
 # Custom types
-Orbit = NewType('Orbit', int)
-Frame = NewType('Frame', str)
-OrbitAndFrame = NewType('OrbitAndFrame', str)
+# Orbit = NewType('Orbit', int)
+# Frame = NewType('Frame', str)
+# OrbitAndFrame = NewType('OrbitAndFrame', str)
+Orbit: TypeAlias = int
+Frame: TypeAlias = str
+OrbitAndFrame: TypeAlias = str
 
 # Constants
 # General script behaviour (can be edited here as required):
@@ -288,7 +299,7 @@ def get_validated_orbit_and_frame(orbit_and_frame: OrbitAndFrame, logger: Logger
         raise
     return orbit_number, frame_id
 
-def get_validated_selected_index(selected_index: int, logger: Logger | None = None) -> int | None:
+def get_validated_selected_index(selected_index: int | None, logger: Logger | None = None) -> int | None:
     """Converts 1-indexed selected_index to 0-indexed and raises InvalidInputError if it is 0"""
     try:
         if selected_index is None:
@@ -464,8 +475,8 @@ def get_product_type_and_version_from_string(input_string: str, logger: Logger |
         'BBR_SNG_1B',
         'BBR_SOL_1B',
         'BBR_LIN_1B',
-        # CPR level 1b  #@ JAXA product
-        'CPR_NOM_1B',   #@ JAXA product
+        # CPR level 1b
+        'CPR_NOM_1B', # JAXA product
         # MSI level 1c
         'MSI_RGR_1C',
         # level 1d
@@ -479,22 +490,27 @@ def get_product_type_and_version_from_string(input_string: str, logger: Logger |
         'ATL_EBD_2A',
         'ATL_CTH_2A',
         'ATL_ALD_2A',
+        'ATL_CLA_2A', # JAXA product
         # MSI level 2a
         'MSI_CM__2A',
         'MSI_COP_2A',
         'MSI_AOT_2A',
+        'MSI_CLP_2A', # JAXA product
         # CPR level 2a
         'CPR_FMR_2A',
         'CPR_CD__2A',
         'CPR_TC__2A',
         'CPR_CLD_2A',
         'CPR_APC_2A',
+        'CPR_ECO_2A', # JAXA product
+        'CPR_CLP_2A', # JAXA product
         # ATLID-MSI level 2b
         'AM__MO__2B',
         'AM__CTH_2B',
         'AM__ACD_2B',
         # ATLID-CPR level 2b
         'AC__TC__2B',
+        'AC__CLP_2B', # JAXA product
         # BBR-MSI-(ATLID) level 2b
         'BM__RAD_2B',
         'BMA_FLX_2B',
@@ -502,13 +518,15 @@ def get_product_type_and_version_from_string(input_string: str, logger: Logger |
         'ACM_CAP_2B',
         'ACM_COM_2B',
         'ACM_RT__2B',
+        'ACM_CLP_2B', # JAXA product
         # ATLID-CPR-MSI-BBR
         'ALL_DF__2B',
         'ALL_3D__2B',
-        # Orbit data    #@ Orbit files in Auxiliary data collection 
-        'MPL_ORBSCT',   #@ orbit scenario file 
-        'AUX_ORBPRE',   #@ predicted orbit file
-        'AUX_ORBRES',   #@ restituted/reconstructed orbit file
+        'ALL_RAD_2B', # JAXA product
+        # Orbit data
+        'MPL_ORBSCT', # Orbit scenario file 
+        'AUX_ORBPRE', # Predicted orbit file
+        'AUX_ORBRES', # Restituted/reconstructed orbit file
     ]
 
     short_names = []
@@ -552,13 +570,17 @@ def get_product_type_and_version_from_string(input_string: str, logger: Logger |
 
 def get_applicable_collection_list(product_type: str) -> list[str]:
     """Returns a filtered list of the collections in which the specified product is stored."""
+    jaxa_l2_products = ['ATL_CLA_2A', 'CPR_ECO_2A', 'CPR_CLP_2A', 'MSI_CLP_2A', 'AC__CLP_2B', 'ACM_CLP_2B', 'ALL_RAD_2B']
     collection_list = [
         'EarthCAREL0L1Products',
         'EarthCAREL1InstChecked',
         'EarthCAREL1Validated',
         'EarthCAREL2Products',
         'EarthCAREL2InstChecked',
+        'EarthCAREL2Validated',
         'JAXAL2Products',
+        'JAXAL2InstChecked',
+        'JAXAL2Validated',
         'EarthCAREAuxiliary',
     ]
     if product_type.split('_')[-1] in ['1B', '1C']:
@@ -567,14 +589,20 @@ def get_applicable_collection_list(product_type: str) -> list[str]:
             'EarthCAREL1InstChecked',
             'EarthCAREL1Validated',
         ]
+    elif product_type in jaxa_l2_products:
+        collection_list = [
+            'JAXAL2Products',
+            'JAXAL2InstChecked',
+            'JAXAL2Validated',
+        ]
     elif product_type.split('_')[-1] in ['2A', '2B']:
         collection_list = [
             'EarthCAREL2Products',
             'EarthCAREL2InstChecked',
-            'JAXAL2Products',
+            'EarthCAREL2Validated',
         ]
     elif product_type.split('_')[-1] in ['1D']:
-        collection_list = ['EarthCAREL0L1Products']
+        collection_list = ['EarthCAREL0L1Products', 'EarthCAREAuxiliary']
     elif product_type.split('_')[-1] in ['ORBSCT', 'ORBPRE', 'ORBRES']:
         collection_list = ['EarthCAREAuxiliary']
     return collection_list
@@ -633,7 +661,7 @@ def response_to_dataframe(response: requests.models.Response) -> pd.DataFrame:
 
 def get_api_request(url_template: str,
                     opensearch_request_parameters: dict,
-                    msg_prefix: str = '',
+                    msg_prefix: str | None = None,
                     logger: Logger | None = None) -> str:
     "Substitutes OpenSearch request parameters in given template"
     opensearch_namespace = 'os:'
@@ -658,7 +686,9 @@ def get_api_request(url_template: str,
     # Correct list charecters
     url_template = url_template.replace('[', '{').replace(']', '}')
 
-    if logger: logger.debug(f"{msg_prefix}API request: <{url_template}>")
+    if logger:
+        if msg_prefix is None: msg_prefix = ''
+        logger.debug(f"{msg_prefix}API request: <{url_template}>")
 
     return url_template
 
@@ -993,7 +1023,7 @@ def download(
 
 def get_product_search_template(collection_identifier: str,
                                 msg_prefix: str = '',
-                                logger: Logger | None = None) -> str:
+                                logger: Logger | None = None) -> str | None:
     """
     Retrieves the OpenSearch URL template for a given OADS collection.
 
@@ -1036,6 +1066,11 @@ def get_product_search_template(collection_identifier: str,
     except requests.exceptions.InvalidSchema as e:
         if logger: logger.exception(e)
         raise
+    except requests.exceptions.MissingSchema as e:
+        if logger:
+            logger.exception(e)
+            logger.error(f'Data collection {collection_identifier} does not seem to be searchable. Please try an alternative collection.')
+        return None
     validate_request_response(granules_response, logger=logger)
 
     # Retrieving the OpenSearch URL template for a product search request
@@ -1051,24 +1086,24 @@ def split_list_into_chunks(lst: list, size: int) -> list[list]:
     return [list(islice(iterator, size)) for _ in range((len(lst) + size - 1) // size)]
 
 def get_product_list(product_search_template: str,
-                     product_id_text: str = None,
-                     sort_by_text: str = None,
-                     num_results_text: str = MAX_NUM_RESULTS_PER_REQUEST,
-                     start_time_text: str = None,
-                     end_time_text: str = None,
-                     poi_text: str = None,
-                     bbox_text: str = None,
-                     illum_angle_text: str = None,
-                     frame_text: str = None,
-                     orbit_number_text: str = None,
-                     instrument_text: str = None,
-                     productType_text: str = None,
-                     productVersion_text: str = None,
-                     orbitDirection_text: str = None,
-                     radius_text: str = None,
-                     lat_text: str = None,
-                     lon_text: str = None,
-                     msg_prefix: str = '',
+                     product_id_text: str | None = None,
+                     sort_by_text: str | None = None,
+                     num_results_text: str | None = "1000",
+                     start_time_text: str | None = None,
+                     end_time_text: str | None = None,
+                     poi_text: str | None = None,
+                     bbox_text: str | None = None,
+                     illum_angle_text: str | None = None,
+                     frame_text: str | None = None,
+                     orbit_number_text: str | None = None,
+                     instrument_text: str | None = None,
+                     productType_text: str | None = None,
+                     productVersion_text: str | None = None,
+                     orbitDirection_text: str | None = None,
+                     radius_text: str | None = None,
+                     lat_text: str | None = None,
+                     lon_text: str | None = None,
+                     msg_prefix: str | None = '',
                      logger: Logger | None = None) -> pd.DataFrame:
     """
     Performs a product search using given URL template and returns dataframe of products based on given search criteria.
@@ -1276,11 +1311,11 @@ def get_parsed_arguments() -> dict:
     )
 
 def get_time_queryparams(start_time: str | None,
-                             end_time: str | None,
-                             timestamps: list[str] | None,
-                             logger: Logger = None) -> tuple[str | None,
-                                                             str | None,
-                                                             list[str] | None]:
+                         end_time: str | None,
+                         timestamps: list[str] | None,
+                         logger: Logger | None = None) -> tuple[str | None,
+                                                          str | None,
+                                                          list[str] | None]:
         """Converts user's time inputs to query parameter strings, that can be used in search requests."""
         start_time_queryparam = None
         if start_time is not None:
@@ -1347,7 +1382,7 @@ def get_radius_queryparams(radius_search: list[str] | None) -> tuple[str, str, s
         return radius_queryparam, lat_queryparam, lon_queryparam
     return None, None, None
 
-def get_bbox_queryparam(bounding_box: list[str] | None) -> str:
+def get_bbox_queryparam(bounding_box: list[str] | None) -> str | None:
     """Convert user's bounding box inputs to a query parameter, that can be used in search requests."""
     if bounding_box is not None:
         return ','.join([str(float(x[1])) for x in bounding_box])
@@ -1507,7 +1542,7 @@ def create_list_of_search_requests(product_types: list[str],
 def main(
     product_types: list[str],
     path_to_data: str | None,
-    timestamps: str | None,
+    timestamps: list[str] | None,
     frame_ids: list[Frame] | None,
     orbit_numbers: list[Orbit] | None,
     orbit_and_frames: list[OrbitAndFrame] | None,
@@ -1530,13 +1565,11 @@ def main(
     is_log: bool,
     is_debug: bool,
     is_found_files_list_to_txt: bool,
+    logger: Logger,
 ):
     raw_user_inputs = locals()
 
     time_start_script = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    remove_old_logs(max_num_logs=MAX_NUM_LOGS, max_age_logs=MAX_AGE_LOGS)
-    logger = create_logger(is_log, debug=is_debug)
 
     # Welcome message
     if logger:
@@ -1659,6 +1692,7 @@ def main(
         
         for collection_identifier in collection_identifier_list:
             template = get_product_search_template(collection_identifier, msg_prefix=f' {counter_msg} ', logger=logger)
+            if template is None: continue
             dataframe = get_product_list(template,
                                         product_id_text=None,
                                         sort_by_text=None,
@@ -1769,4 +1803,12 @@ def main(
 
 if __name__ == "__main__":
     args = get_parsed_arguments()
-    main(**args)
+
+    remove_old_logs(max_num_logs=MAX_NUM_LOGS, max_age_logs=MAX_AGE_LOGS)
+    logger = create_logger(args['is_log'], debug=args['is_debug'])
+
+    try:
+        main(**args, logger=logger)
+    except Exception as e:
+        logger.exception(e)
+        raise

@@ -1,5 +1,5 @@
 # oads-download
-`oads_download.py` is a Python script designed to download EarthCARE data products from ESA's Online Access and Distribution System (OADS). The execution of the script is divided into two parts:
+`oads_download.py` is a Python script designed to download [EarthCARE](https://earth.esa.int/eogateway/missions/earthcare) data products from ESA's Online Access and Distribution System (OADS). The execution of the script is divided into two parts:
 1. Based on user inputs via the command-line search requests are send to the OpenSearch API data catalogue [EO-CAT](https://eocat.esa.int/).
 2. The resulting list of products is then downloaded from the OADS servers:
     - https://ec-pdgs-dissemination1.eo.esa.int/
@@ -7,8 +7,12 @@
 
 User credentials are not required for the search part but are needed for the download part and must be provided in a separate configuration file (called `config.toml`) where OADS data collections must also be selected depending on your data access authorization. The detailed content of each collection is described [here](https://earth.esa.int/eogateway/faq/esa-earthcare-online-dissemination-service-user-s-guidelines).
 
-The code of this script is developed by Leonard König (TROPOS) based on a Jupyter notebook provided by ESA.
+The code of this script is developed by Leonard König ([TROPOS](https://www.tropos.de/en/)) based on a Jupyter notebook provided by ESA.
 If you have questions please create an issue or contact koenig@tropos.de.
+
+<div style="text-align: left;margin-top: 2em;">
+   <a href="http://www.tropos.de/en/" target="_blank"><img src="https://polly.tropos.de/static/images/logos/TROPOS-Logo_ENG_small.png" width="200px" height="71px" alt="http://www.tropos.de/"></a>
+</div>
 
 ## Table of Contents
 - [Setup](https://github.com/koenigleon/oads-download?tab=readme-ov-file#setup)
@@ -20,7 +24,12 @@ If you have questions please create an issue or contact koenig@tropos.de.
         - [*How do I obtain data for an entire day?*](https://github.com/koenigleon/oads-download?tab=readme-ov-file#example-3-how-do-i-obtain-data-for-an-entire-day)
         - [*How can I first search for product candidates and then select a single product?*](https://github.com/koenigleon/oads-download?tab=readme-ov-file#example-4-how-can-i-first-search-for-product-candidates-and-then-select-a-single-product)
         - [*How to download orbit ranges?*](https://github.com/koenigleon/oads-download?tab=readme-ov-file#further-examples-how-to-download-orbit-ranges)
-- [Table of product name aliases](https://github.com/koenigleon/oads-download?tab=readme-ov-file#table-of-product-name-aliases)
+- [Tables of product name aliases](https://github.com/koenigleon/oads-download?tab=readme-ov-file#table-of-product-name-aliases)
+  - [Level 1 products](https://github.com/koenigleon/oads-download?tab=readme-ov-file#level-1-products)
+  - [Level 2a products](https://github.com/koenigleon/oads-download?tab=readme-ov-file#level-2a-products)
+  - [Level 2b products](https://github.com/koenigleon/oads-download?tab=readme-ov-file#level-2b-products)
+  - [Auxiliary data](https://github.com/koenigleon/oads-download?tab=readme-ov-file#auxiliary-data)
+  - [Orbit data](https://github.com/koenigleon/oads-download?tab=readme-ov-file#orbit-data)
 
 ## Setup
 
@@ -154,52 +163,90 @@ Download all frames between 01300D and 01302B (15 files):
 $ python oads_download.py AALD -soaf 01300D -eoaf 01302B
 ```
 
-## Table of product name aliases
+## Tables of product name aliases
 
-| No | Product name | File type | Shorthand |
-| --- | --- | --- | --- |
-| 1 | A-NOM | ATL_NOM_1B | ANOM |
-| 2 | M-NOM | MSI_NOM_1B | MNOM |
-| 3 | B-NOM | BBR_NOM_1B | BNOM |
-| 4 | B-SNG | BBR_SNG_1B | BSNG |
-| 5 | C-NOM | CPR_NOM_1B | CNOM |
-| 6 | M-RGR | MSI_RGR_1C | MRGR |
-| 7 | X-MET | AUX_MET_1D | XMET |
-| 8 | X-JSG | AUX_JSG_1D | XJSG |
-| 9 | A-FM | ATL_FM__2A | AFM |
-| 10 | A-AER | ATL_AER_2A | AAER |
-| 11 | A-ICE | ATL_ICE_2A | AICE |
-| 12 | A-TC | ATL_TC__2A | ATC |
-| 13 | A-EBD | ATL_EBD_2A | AEBD |
-| 14 | A-CTH | ATL_CTH_2A | ACTH |
-| 15 | A-ALD | ATL_ALD_2A | AALD |
-| 16 | M-CM | MSI_CM__2A | MCM |
-| 17 | M-COP | MSI_COP_2A | MCOP |
-| 18 | M-AOT | MSI_AOT_2A | MAOT |
-| 19 | C-FMR | CPR_FMR_2A | CFMR |
-| 20 | C-CD | CPR_CD__2A | CCD |
-| 21 | C-TC | CPR_TC__2A | CTC |
-| 22 | C-CLD | CPR_CLD_2A | CCLD |
-| 23 | C-APC | CPR_APC_2A | CAPC |
-| 24 | AM-MO | AM__MO__2B | AMMO |
-| 25 | AM-CTH | AM__CTH_2B | AMCTH |
-| 26 | AM-ACD | AM__ACD_2B | AMACD |
-| 27 | AC-TC | AC__TC__2B | ACTC |
-| 28 | BM-RAD | BM__RAD_2B | BMRAD |
-| 29 | BMA-FLX | BMA_FLX_2B | BMAFLX |
-| 30 | ACM-CAP | ACM_CAP_2B | ACMCAP |
-| 31 | ACM-COM | ACM_COM_2B | ACMCOM |
-| 32 | ACM-RT | ACM_RT__2B | ACMRT |
-| 33 | ACMB-3D | ALL_3D__2B | ALL3D |
-| 34 | ACMB-DF | ALL_DF__2B | ALLDF |
-| 35 | A-DCC | ATL_DCC_1B | ADCC |
-| 36 | A-CSC | ATL_CSC_1B | ACSC |
-| 37 | A-FSC | ATL_FSC_1B | AFSC |
-| 38 | M-BBS | MSI_BBS_1B | MBBS |
-| 39 | M-SD1 | MSI_SD1_1B | MSD1 |
-| 40 | M-SD2 | MSI_SD2_1B | MSD2 |
-| 41 | B-SOL | BBR_SOL_1B | BSOL |
-| 42 | B-LIN | BBR_LIN_1B | BLIN |
-| 43 | ORBSCT (orbit scenario) | MPL_ORBSCT | MPLORBS |
-| 44 | ORBPRE (predicted orbit) | AUX_ORBPRE | XORBP |
-| 45 | ORBRES (reconstructed orbit) | AUX_ORBRES | XORBR |
+### Level 1 products
+
+| Product name | File type  | Shorthand | Notes        |
+| ------------ | ---------- | --------- | ------------ |
+| A-NOM        | ATL_NOM_1B | ANOM      |              |
+| M-NOM        | MSI_NOM_1B | MNOM      |              |
+| B-NOM        | BBR_NOM_1B | BNOM      |              |
+| C-NOM        | CPR_NOM_1B | CNOM      | JAXA product |
+| M-RGR        | MSI_RGR_1C | MRGR      |              |
+
+<details>
+
+<summary>Calibration products</summary>
+
+| Product name | File type  | Shorthand | Notes |
+| ------------ | ---------- | --------- | ----- |
+| A-DCC        | ATL_DCC_1B | ADCC      |       |
+| A-CSC        | ATL_CSC_1B | ACSC      |       |
+| A-FSC        | ATL_FSC_1B | AFSC      |       |
+| M-BBS        | MSI_BBS_1B | MBBS      |       |
+| M-SD1        | MSI_SD1_1B | MSD1      |       |
+| M-SD2        | MSI_SD2_1B | MSD2      |       |
+| B-SNG        | BBR_SNG_1B | BSNG      |       |
+| B-SOL        | BBR_SOL_1B | BSOL      |       |
+| B-LIN        | BBR_LIN_1B | BLIN      |       |
+
+</details>
+
+### Level 2a products
+
+| Product name | File type  | Shorthand | Notes        |
+| ------------ | ---------- | --------- | ------------ |
+| A-FM         | ATL_FM__2A | AFM       |              |
+| A-AER        | ATL_AER_2A | AAER      |              |
+| A-ICE        | ATL_ICE_2A | AICE      |              |
+| A-TC         | ATL_TC__2A | ATC       |              |
+| A-EBD        | ATL_EBD_2A | AEBD      |              |
+| A-CTH        | ATL_CTH_2A | ACTH      |              |
+| A-ALD        | ATL_ALD_2A | AALD      |              |
+| M-CM         | MSI_CM__2A | MCM       |              |
+| M-COP        | MSI_COP_2A | MCOP      |              |
+| M-AOT        | MSI_AOT_2A | MAOT      |              |
+| C-FMR        | CPR_FMR_2A | CFMR      |              |
+| C-CD         | CPR_CD__2A | CCD       |              |
+| C-TC         | CPR_TC__2A | CTC       |              |
+| C-CLD        | CPR_CLD_2A | CCLD      |              |
+| C-APC        | CPR_APC_2A | CAPC      |              |
+| A-CLA        | ATL_CLA_2A | ACLA      | JAXA product |
+| M-CLP        | MSI_CLP_2A | MCLP      | JAXA product |
+| C-ECO        | CPR_ECO_2A | CECO      | JAXA product |
+| C-CLP        | CPR_CLP_2A | CCLP      | JAXA product |
+
+### Level 2b products
+
+| Product name | File type  | Shorthand | Notes        |
+| ------------ | ---------- | --------- | ------------ |
+| AM-MO        | AM__MO__2B | AMMO      |              |
+| AM-CTH       | AM__CTH_2B | AMCTH     |              |
+| AM-ACD       | AM__ACD_2B | AMACD     |              |
+| AC-TC        | AC__TC__2B | ACTC      |              |
+| BM-RAD       | BM__RAD_2B | BMRAD     |              |
+| BMA-FLX      | BMA_FLX_2B | BMAFLX    |              |
+| ACM-CAP      | ACM_CAP_2B | ACMCAP    |              |
+| ACM-COM      | ACM_COM_2B | ACMCOM    |              |
+| ACM-RT       | ACM_RT__2B | ACMRT     |              |
+| ACMB-3D      | ALL_3D__2B | ALL3D     |              |
+| ACMB-DF      | ALL_DF__2B | ALLDF     |              |
+| AC-CLP       | AC__CLP_2B | ACCLP     | JAXA product |
+| ACM-CLP      | ACM_CLP_2B | ACMCLP    | JAXA product |
+| ACMB-RAD     | ALL_RAD_2B | ALLRAD    | JAXA product |
+
+### Auxiliary data
+
+| Product name | File type  | Shorthand | Notes |
+| ------------ | ---------- | --------- | ----- |
+| X-MET        | AUX_MET_1D | XMET      |       |
+| X-JSG        | AUX_JSG_1D | XJSG      |       |
+
+### Orbit data
+
+| Product name | File type  | Shorthand | Notes               |
+| ------------ | ---------- | --------- | ------------------- |
+| ORBSCT       | MPL_ORBSCT | MPLORBS   | Orbit scenario      |
+| ORBPRE       | AUX_ORBPRE | XORBP     | Predicted orbit     |
+| ORBRES       | AUX_ORBRES | XORBR     | Reconstructed orbit |
