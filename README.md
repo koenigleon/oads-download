@@ -24,7 +24,7 @@ If you have questions please create an issue or contact koenig@tropos.de.
         - [*How do I obtain data for an entire day?*](https://github.com/koenigleon/oads-download?tab=readme-ov-file#example-3-how-do-i-obtain-data-for-an-entire-day)
         - [*How can I first search for product candidates and then select a single product?*](https://github.com/koenigleon/oads-download?tab=readme-ov-file#example-4-how-can-i-first-search-for-product-candidates-and-then-select-a-single-product)
         - [*How to download orbit ranges?*](https://github.com/koenigleon/oads-download?tab=readme-ov-file#further-examples-how-to-download-orbit-ranges)
-- [Tables of product name aliases](https://github.com/koenigleon/oads-download?tab=readme-ov-file#table-of-product-name-aliases)
+- [Tables of product name aliases](https://github.com/koenigleon/oads-download?tab=readme-ov-file#tables-of-product-name-aliases)
   - [Level 1 products](https://github.com/koenigleon/oads-download?tab=readme-ov-file#level-1-products)
   - [Level 2a products](https://github.com/koenigleon/oads-download?tab=readme-ov-file#level-2a-products)
   - [Level 2b products](https://github.com/koenigleon/oads-download?tab=readme-ov-file#level-2b-products)
