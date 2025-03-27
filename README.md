@@ -34,12 +34,12 @@ If you have questions please create an issue or contact koenig@tropos.de.
 ## Setup
 
 - Make sure that you are using a Python environment with the following dependencies:
-    - python 3.11+
-    - requests
-    - numpy
-    - pandas
-    - beautifulsoup4
-    - lxml
+    - python 3.11+ (or 3.10 with `tomli`)
+    - `requests`
+    - `numpy`
+    - `pandas`
+    - `beautifulsoup4`
+    - `lxml`
 - Create a copy of the [example_config.toml](example_config.toml) file and rename it to `config.toml`. It should be located in the same directory as the script `oads_download.py`.
 - Enter your OADS credentials as well as the path to your desired data folder.
 - Comment out or remove all OADS data collections for which you do not have access authorizations. Otherwise you may not be able to download any data.
