@@ -7,8 +7,8 @@
 #
 __author__ = "Leonard König"
 __email__ = "koenig@tropos.de"
-__date__ = "2025-03-27"
-__version__ = "2.7.1"
+__date__ = "2025-03-31"
+__version__ = "2.7.2"
 __description__ = """This is a Python script designed to download EarthCARE satellite
 data from ESA's Online Access and Distribution System (OADS) using
 the OpenSearch API of the Earth Observation Catalogue (EO-CAT).
@@ -583,7 +583,7 @@ def get_applicable_collection_list(product_type: str) -> list[str]:
         'JAXAL2Validated',
         'EarthCAREAuxiliary',
     ]
-    if product_type.split('_')[-1] in ['1B', '1C']:
+    if product_type.split('_')[-1] in ['1B', '1C', '1D']:
         collection_list = [
             'EarthCAREL0L1Products',
             'EarthCAREL1InstChecked',
@@ -601,8 +601,6 @@ def get_applicable_collection_list(product_type: str) -> list[str]:
             'EarthCAREL2InstChecked',
             'EarthCAREL2Validated',
         ]
-    elif product_type.split('_')[-1] in ['1D']:
-        collection_list = ['EarthCAREL0L1Products', 'EarthCAREAuxiliary']
     elif product_type.split('_')[-1] in ['ORBSCT', 'ORBPRE', 'ORBRES']:
         collection_list = ['EarthCAREAuxiliary']
     return collection_list
@@ -737,9 +735,9 @@ def get_product_info_from_path(filepath: str) -> dict[str, str | int | pd.Timest
 def get_product_sub_dirname(product_name: str) -> str:
     """Returns level subfolder name of given product name."""
     if product_name in ['AUX_JSG_1D', 'AUX_MET_1D']:
-        sub_dirname = SUBDIR_NAME_AUX_FILES # 'Meteo_Supporting_Files'
+        sub_dirname = SUBDIR_NAME_AUX_FILES
     elif product_name in ['MPL_ORBSCT', 'AUX_ORBPRE', 'AUX_ORBRES']:
-        sub_dirname = SUBDIR_NAME_ORB_FILES # 'Orbit_Data_Files'
+        sub_dirname = SUBDIR_NAME_ORB_FILES
     elif '0' in product_name.lower():
         sub_dirname = SUBDIR_NAME_L0__FILES
     elif '1b' in product_name.lower():
@@ -817,8 +815,7 @@ def download(
         eoiam_idp_hostname = "eoiam-idp.eo.esa.int"
 
         # Requesting access to the OADS server storing the products
-        access_response = requests.get(f"https://{oads_hostname}/oads/access/login",
-                                       proxies=proxies)
+        access_response = requests.get(f"https://{oads_hostname}/oads/access/login", proxies=proxies)
         validate_request_response(access_response, logger=logger)
 
         # Extracting the cookies from the response
@@ -1009,12 +1006,8 @@ def download(
                     break
 
         # Logout of authentication platform and OADS
-        requests.get(f'https://{oads_hostname}/oads/Shibboleth.sso/Logout',
-                     proxies=proxies,
-                     stream=True)
-        requests.get(f'https://{eoiam_idp_hostname}/Shibboleth.sso/Logout',
-                     proxies=proxies,
-                     stream=True)
+        with requests.get(f'https://{oads_hostname}/oads/Shibboleth.sso/Logout', proxies=proxies, stream=True) as _: pass
+        with requests.get(f'https://{eoiam_idp_hostname}/Shibboleth.sso/Logout', proxies=proxies, stream=True) as _: pass
     
     total_download_size = 0 if len(download_sizes) == 0 else np.sum(download_sizes)
     mean_download_speed = 0 if len(download_speeds) == 0 else np.mean(download_speeds)
