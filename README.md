@@ -24,7 +24,7 @@ If you have questions please create an issue or contact koenig@tropos.de.
         - [*How do I obtain data for an entire day?*](https://github.com/koenigleon/oads-download?tab=readme-ov-file#example-3-how-do-i-obtain-data-for-an-entire-day)
         - [*How can I first search for product candidates and then select a single product?*](https://github.com/koenigleon/oads-download?tab=readme-ov-file#example-4-how-can-i-first-search-for-product-candidates-and-then-select-a-single-product)
         - [*How to download orbit ranges?*](https://github.com/koenigleon/oads-download?tab=readme-ov-file#further-examples-how-to-download-orbit-ranges)
-- [Tables of product name aliases](https://github.com/koenigleon/oads-download?tab=readme-ov-file#table-of-product-name-aliases)
+- [Tables of product name aliases](https://github.com/koenigleon/oads-download?tab=readme-ov-file#tables-of-product-name-aliases)
   - [Level 1 products](https://github.com/koenigleon/oads-download?tab=readme-ov-file#level-1-products)
   - [Level 2a products](https://github.com/koenigleon/oads-download?tab=readme-ov-file#level-2a-products)
   - [Level 2b products](https://github.com/koenigleon/oads-download?tab=readme-ov-file#level-2b-products)
@@ -34,12 +34,12 @@ If you have questions please create an issue or contact koenig@tropos.de.
 ## Setup
 
 - Make sure that you are using a Python environment with the following dependencies:
-    - python 3.11+
-    - requests
-    - numpy
-    - pandas
-    - beautifulsoup4
-    - lxml
+    - python 3.11+ (or 3.10 with `tomli`)
+    - `requests`
+    - `numpy`
+    - `pandas`
+    - `beautifulsoup4`
+    - `lxml`
 - Create a copy of the [example_config.toml](example_config.toml) file and rename it to `config.toml`. It should be located in the same directory as the script `oads_download.py`.
 - Enter your OADS credentials as well as the path to your desired data folder.
 - Comment out or remove all OADS data collections for which you do not have access authorizations. Otherwise you may not be able to download any data.
