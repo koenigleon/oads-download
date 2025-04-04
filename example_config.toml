@@ -6,15 +6,16 @@ username = 'your_username'
 password = """your_password""" # Use triple quotation marks to allow for special characters
 # You need to comment out or remove all collections to which you do not have access rights to
 collections = [
-    'EarthCAREAuxiliary',     # EarthCARE Auxiliary Data for Cal/Val Users
-    'EarthCAREL2Validated',   # EarthCARE ESA L2 Products
-    'EarthCAREL2InstChecked', # EarthCARE ESA L2 Products for Cal/Val Users
-    'EarthCAREL2Products',    # EarthCARE ESA L2 Products for the Commissioning Team
-    'JAXAL2Validated',        # EarthCARE JAXA L2 Products
-    'JAXAL2InstChecked',      # EarthCARE JAXA L2 Products for Cal/Val Users
-    'JAXAL2Products',         # EarthCARE JAXA L2 Products for the Commissioning Team
-    'EarthCAREL0L1Products',  # EarthCARE L0 and L1 Products for the Commissioning Team
-    'EarthCAREL1Validated',   # EarthCARE L1 Products
-    'EarthCAREL1InstChecked', # EarthCARE L1 Products for Cal/Val Users
-    'EarthCAREOrbitData',     # EarthCARE Orbit Data
+    'EarthCAREL0L1Products',      # EarthCARE L0 and L1 Products  ! ONLY FOR COMMISSIONING TEAM USERS !
+    'EarthCAREL1Validated',       # EarthCARE L1 Products
+    'EarthCAREL1InstChecked',     # EarthCARE L1 Products         ! ONLY FOR CAL/VAL USER             !
+    'EarthCAREL2Validated',       # EarthCARE ESA L2 Products
+    'EarthCAREL2InstChecked',     # EarthCARE ESA L2 Products     ! ONLY FOR CAL/VAL USER             !
+    'EarthCAREL2Products',        # EarthCARE ESA L2 Products     ! ONLY FOR COMMISSIONING TEAM USERS !
+    'JAXAL2Validated',            # EarthCARE JAXA L2 Products
+    'JAXAL2InstChecked',          # EarthCARE JAXA L2 Products    ! ONLY FOR CAL/VAL USER             !
+    'JAXAL2Products',             # EarthCARE JAXA L2 Products    ! ONLY FOR COMMISSIONING TEAM USERS !
+    'EarthCAREAuxiliary',         # EarthCARE Auxiliary Data      ! ONLY FOR CAL/VAL USER             !
+    'EarthCAREXMETL1DProducts10', # EarthCARE Meteorological Data
+    'EarthCAREOrbitData',         # EarthCARE Orbit Data
 ]

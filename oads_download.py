@@ -7,8 +7,8 @@
 #
 __author__ = "Leonard König"
 __email__ = "koenig@tropos.de"
-__date__ = "2025-03-31"
-__version__ = "2.7.2"
+__date__ = "2025-04-04"
+__version__ = "2.7.3"
 __description__ = """This is a Python script designed to download EarthCARE satellite
 data from ESA's Online Access and Distribution System (OADS) using
 the OpenSearch API of the Earth Observation Catalogue (EO-CAT).
@@ -27,7 +27,7 @@ import datetime
 try:
     import tomllib
 except ModuleNotFoundError:
-    import tomli as tomllib
+    import tomli as tomllib # type: ignore
 from zipfile import ZipFile, BadZipFile
 from urllib.parse import urlparse
 from xml.etree import ElementTree
@@ -83,17 +83,18 @@ username = 'your_username'
 password = \"\"\"your_password\"\"\" # Use triple quotation marks to allow for special characters
 # You need to comment out or remove all collections to which you do not have access rights to
 collections = [
-    'EarthCAREAuxiliary',     # EarthCARE Auxiliary Data for Cal/Val Users
-    'EarthCAREL2Validated',   # EarthCARE ESA L2 Products
-    'EarthCAREL2InstChecked', # EarthCARE ESA L2 Products for Cal/Val Users
-    'EarthCAREL2Products',    # EarthCARE ESA L2 Products for the Commissioning Team
-    'JAXAL2Validated',        # EarthCARE JAXA L2 Products
-    'JAXAL2InstChecked',      # EarthCARE JAXA L2 Products for Cal/Val Users
-    'JAXAL2Products',         # EarthCARE JAXA L2 Products for the Commissioning Team
-    'EarthCAREL0L1Products',  # EarthCARE L0 and L1 Products for the Commissioning Team
-    'EarthCAREL1Validated',   # EarthCARE L1 Products
-    'EarthCAREL1InstChecked', # EarthCARE L1 Products for Cal/Val Users
-    'EarthCAREOrbitData',     # EarthCARE Orbit Data
+    'EarthCAREL0L1Products',      # EarthCARE L0 and L1 Products  ! ONLY FOR COMMISSIONING TEAM USERS !
+    'EarthCAREL1Validated',       # EarthCARE L1 Products
+    'EarthCAREL1InstChecked',     # EarthCARE L1 Products         ! ONLY FOR CAL/VAL USER             !
+    'EarthCAREL2Validated',       # EarthCARE ESA L2 Products
+    'EarthCAREL2InstChecked',     # EarthCARE ESA L2 Products     ! ONLY FOR CAL/VAL USER             !
+    'EarthCAREL2Products',        # EarthCARE ESA L2 Products     ! ONLY FOR COMMISSIONING TEAM USERS !
+    'JAXAL2Validated',            # EarthCARE JAXA L2 Products
+    'JAXAL2InstChecked',          # EarthCARE JAXA L2 Products    ! ONLY FOR CAL/VAL USER             !
+    'JAXAL2Products',             # EarthCARE JAXA L2 Products    ! ONLY FOR COMMISSIONING TEAM USERS !
+    'EarthCAREAuxiliary',         # EarthCARE Auxiliary Data      ! ONLY FOR CAL/VAL USER             !
+    'EarthCAREXMETL1DProducts10', # EarthCARE Meteorological Data
+    'EarthCAREOrbitData',         # EarthCARE Orbit Data
 ]
 ─────────────────────────────────────────────────────────────────────────────────────────────────
 """
@@ -582,8 +583,15 @@ def get_applicable_collection_list(product_type: str) -> list[str]:
         'JAXAL2InstChecked',
         'JAXAL2Validated',
         'EarthCAREAuxiliary',
+        'EarthCAREXMETL1DProducts10',
     ]
-    if product_type.split('_')[-1] in ['1B', '1C', '1D']:
+    if product_type in ['AUX_MET_1D']:
+        collection_list = [
+            'EarthCAREL0L1Products',
+            'EarthCAREL1InstChecked',
+            'EarthCAREXMETL1DProducts10',
+        ]
+    elif product_type.split('_')[-1] in ['1B', '1C', '1D']:
         collection_list = [
             'EarthCAREL0L1Products',
             'EarthCAREL1InstChecked',
