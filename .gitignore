@@ -193,3 +193,10 @@ config.toml
 
 # Results file
 results.txt
+
+# Other files
+*.ipynb
+*.txt
+*.xml
+items
+items(*)

@@ -7,8 +7,8 @@
 #
 __author__ = "Leonard König"
 __email__ = "koenig@tropos.de"
-__date__ = "2025-04-04"
-__version__ = "2.7.3"
+__date__ = "2025-04-10"
+__version__ = "3.0.0"
 __description__ = """This is a Python script designed to download EarthCARE satellite
 data from ESA's Online Access and Distribution System (OADS) using
 the OpenSearch API of the Earth Observation Catalogue (EO-CAT).
@@ -29,27 +29,26 @@ try:
 except ModuleNotFoundError:
     import tomli as tomllib # type: ignore
 from zipfile import ZipFile, BadZipFile
-from urllib.parse import urlparse
-from xml.etree import ElementTree
+import urllib.parse as urlp
 import logging
 from logging import Logger
 from dataclasses import dataclass
 from itertools import islice
-from typing import NewType, Final, TypeAlias
+from typing import Final, TypeAlias
+import json
 
 import requests
 import numpy as np
 import pandas as pd
+from pandas._libs.tslibs.parsing import DateParseError
 from bs4 import BeautifulSoup
 from lxml import html
 
 # Custom types
-# Orbit = NewType('Orbit', int)
-# Frame = NewType('Frame', str)
-# OrbitAndFrame = NewType('OrbitAndFrame', str)
 Orbit: TypeAlias = int
 Frame: TypeAlias = str
 OrbitAndFrame: TypeAlias = str
+DictJSON: TypeAlias = dict
 
 # Constants
 # General script behaviour (can be edited here as required):
@@ -106,7 +105,7 @@ class BadResponseError(Exception): pass
 @dataclass
 class SearchRequest():
     """This class contains all data required as input for the URL template of the OpenSearch API request to EO-CAT."""
-    collection_identifier_list: list[str] | None = None
+    collection_identifier_list: list[str]
     product_type: str | None = None
     product_version: str | None = None
     radius: str | None = None
@@ -159,10 +158,6 @@ def log_heading(text: str, logger: Logger, is_mayor: bool = False, line_length: 
     logger.info(top_left + horizontal * line_length + top_right)
     logger.info(vertical + ' ' * padding_left + text + ' ' * padding_right + vertical)
     logger.info(bottom_left + horizontal * line_length + bottom_right)
-    
-    # logger.info(line_character * line_length)
-    # logger.info(text)
-    # logger.info(line_character * line_length)
 
 # --- Set up logging --------------------------------------
 def remove_old_logs(max_num_logs: int | None = None, max_age_logs: pd.Timedelta | None = None) -> None:
@@ -236,10 +231,82 @@ def ensure_directory(dirpath: str) -> None:
         os.mkdir(dirpath)
 # ---------------------------------------------------------
 
-def validate_request_response(response: requests.models.Response, logger: Logger | None = None) -> None:
-    """Raises HTTPError if one occurred and logs it"""
+def get_request(url: str, logger: Logger | None = None, **kwargs) -> requests.Response:
+    """Sends a GET request, validates it's response and returns it."""
+    if logger: logger.debug(f"Send GET request: {url}")
+    response = requests.get(url, **kwargs)
+    validate_request_response(response)
+    return response
+
+def get_url_of_queryables(data: DictJSON) -> str:
+    """Finds queryables url in JSON data and raises `ValueError` if not found."""
+    matching_hrefs = []
+    for link in data.get("links", []):
+        if link.get("rel") == "http://www.opengis.net/def/rel/ogc/1.0/queryables":
+            matching_hrefs.append(link.get("href"))
+    if len(matching_hrefs) == 0:
+        raise ValueError(f"Can not find queryables url.")
+    return matching_hrefs[0]
+
+def get_url_of_items(data: DictJSON) -> str:
+    """Finds items url in JSON data and raises `ValueError` if not found."""
+    matching_hrefs = []
+    for link in data.get("links", []):
+        if link.get("rel") == "items":
+            matching_hrefs.append(link.get("href"))
+    if len(matching_hrefs) == 0:
+        raise ValueError(f"Can not find items url.")
+    return matching_hrefs[0]
+
+def get_url_of_collection_items(
+    collection_identifier: str,
+    logger: Logger | None = None,
+) -> str:
+    """Finds items url of given collection."""
+    url_entrypoint = 'https://eocat.esa.int/collections'
+    if logger: logger.debug(f"Entrypoint: {url_entrypoint}")
+
+    response = get_request(url_entrypoint, logger=logger)
+
+    data = json.loads(response.text)
+    url_collections_queryables = get_url_of_queryables(data)
+    if logger: logger.debug(f"Collections queryables: {url_collections_queryables}")
+
+    # response = get_request(url_collections_queryables, logger=logger)
+    # data = json.loads(response.text)
+    # if logger: logger.debug(list(data.keys()))
+    # data['properties']
+
+    url_earthcare_collections = f"{url_entrypoint}?&title=earthcare&limit=100"
+    if logger: logger.debug(f"Search for EarthCARE collections: {url_earthcare_collections}")
+    response = get_request(url_earthcare_collections, logger=logger)
+    # if logger: logger.debug(response)
+
+    data_collections = json.loads(response.text)
+    available_earthcare_collections = [d['id'] for d in data_collections['collections']]
+    if logger: logger.debug(f"Available EarthCARE collections: {available_earthcare_collections}")
+
+    data_collection = [d for d in data_collections['collections'] if d['id'] == collection_identifier][0]
+    # url_collection_queryables = get_url_of_queryables(data_collection)
+    # if logger: logger.debug(url_collection_queryables)
+
+    # response = get_request(url_collection_queryables, logger=logger)
+    # data_collection_queryables = json.loads(response.text)
+    # # if logger: logger.debug(list(data_collection_queryables.keys()))
+    # if logger: logger.debug(list(data_collection_queryables['properties'].keys()))
+
+    url_collection_items = get_url_of_items(data_collection)
+    # if logger: logger.debug(url_collection_items)
+
+    return url_collection_items
+
+def validate_request_response(
+    response: requests.models.Response,
+    logger: Logger | None = None,
+) -> None:
+    """Raises HTTPError if one occurred and logs it."""
     try:
-        response.raise_for_status() # raise an for bad responses
+        response.raise_for_status()
     except requests.HTTPError as e:
         if logger: logger.exception(e)
         raise
@@ -350,11 +417,11 @@ def get_complete_and_incomplete_orbits(orbit_and_frames: list[tuple[Orbit, Frame
         - A list of complete orbits.
         - A dictionary where each key is a frame ID, and the value is a list of orbits assigned to that frame.
     """
-    if orbit_and_frames is None: return None, None
+    if not isinstance(orbit_and_frames, list): return None, None
     if len(orbit_and_frames) == 0: return None, None
     
-    orbit_numbers, frame_ids = zip(*orbit_and_frames)
-    orbit_numbers, frame_ids = list(orbit_numbers), list(frame_ids)
+    orbit_numbers: list[Orbit] = [oaf[0] for oaf in orbit_and_frames]
+    frame_ids: list[Frame] = [oaf[1] for oaf in orbit_and_frames]
 
     df = pd.DataFrame(dict(orbit_number=orbit_numbers, frame_id=frame_ids))
 
@@ -613,58 +680,6 @@ def get_applicable_collection_list(product_type: str) -> list[str]:
         collection_list = ['EarthCAREAuxiliary']
     return collection_list
 
-def response_to_dataframe(response: requests.models.Response) -> pd.DataFrame:
-    """Converts OpenSearch query response to a dataframe."""
-    # Create empty dataframe with required columns
-    df = pd.DataFrame(
-        columns=[
-            'dc:identifier', 
-            'atom:title', 
-            'atom:updated', 
-            'atom:link[rel="search"]', 
-            'atom:link[rel="enclosure"]', 
-            'atom:link[rel="icon"]',
-        ]
-    )
-    # Gather information from OpenSearch query
-    rt = ElementTree.fromstring(response.text)
-    for r in rt.findall('{http://www.w3.org/2005/Atom}entry'):
-        name = r.find('{http://purl.org/dc/elements/1.1/}identifier').text
-        title = r.find('{http://www.w3.org/2005/Atom}title').text
-        updated = r.find('{http://www.w3.org/2005/Atom}updated').text
-        dcdate = r.find('{http://purl.org/dc/elements/1.1/}date').text
-
-        try:
-            href = r.find('{http://www.w3.org/2005/Atom}link[@rel="search"][@type="application/opensearchdescription+xml"]').attrib['href']
-        except AttributeError:
-            href = ''
-
-        try:
-            rel_enclosure = r.find('{http://www.w3.org/2005/Atom}link[@rel="enclosure"]').attrib['href']
-        except AttributeError:
-            rel_enclosure = ''
-
-        try:
-            rel_icon = r.find('{http://www.w3.org/2005/Atom}link[@rel="icon"]').attrib['href']
-        except AttributeError:
-            rel_icon = ''
-
-        new_row = {
-            'dc:identifier': name,
-            'atom:title': title,
-            'dc:date': dcdate,
-            'atom:updated': updated,
-            'atom:link[rel="search"]': href,
-            'atom:link[rel="enclosure"]': rel_enclosure,
-            'server': urlparse(rel_enclosure).netloc,
-            'atom:link[rel="icon"]': rel_icon,
-        }
-
-        df_new_row = pd.DataFrame(new_row, index = [0])
-        df = pd.concat([df, df_new_row], ignore_index=True)
-
-    return df
-
 def get_api_request(url_template: str,
                     opensearch_request_parameters: dict,
                     msg_prefix: str | None = None,
@@ -702,7 +717,7 @@ def safe_parse_timestamp(timestamp: str) -> pd.Timestamp:
     """Converts string to valid pandas.Timestamp, returns min timestamp on error."""
     try:
         return pd.to_datetime(timestamp, errors="raise")
-    except (pd._libs.tslibs.parsing.DateParseError, ValueError):
+    except (DateParseError, ValueError):
         return pd.Timestamp.min
 
 def get_product_info_from_path(filepath: str) -> dict[str, str | int | pd.Timestamp]:
@@ -719,7 +734,7 @@ def get_product_info_from_path(filepath: str) -> dict[str, str | int | pd.Timest
     
     product_name = filename[9:19]
 
-    filename_info = dict(
+    filename_info: dict[str, str | int | pd.Timestamp] = dict(
         filepath = filepath,
         dirpath = os.path.dirname(filepath),
         filename = filename,
@@ -816,7 +831,7 @@ def download(
     download_sizes = []
     download_speeds = []
     for server, df_group in dataframe.groupby('server'):
-        proxies = {}
+        proxies: dict = {}
 
         oads_hostname = server
         if logger: logger.info(f"Selecting dissemination service: {oads_hostname}")
@@ -853,7 +868,7 @@ def download(
 
         # Parsing the response from authentication platform
         tree = html.fromstring(auth_response.content)
-        responseView = BeautifulSoup(auth_response.text, 'html.parser')
+        # responseView = BeautifulSoup(auth_response.text, 'html.parser')
         # if logger: logger.debug(responseView)
 
         # Extracting the variables needed to redirect from a successful authentication to OADS
@@ -889,7 +904,7 @@ def download(
             success = False
 
             # Extracting the filename from the download link
-            file_name = (row['atom:link[rel="enclosure"]']).split("/")[-1]
+            file_name = (row['download_url']).split("/")[-1]
             product_dirpath = get_local_product_dirpath(download_directory, file_name, create_subdirs=is_create_subdirs)
             # Make sure the local download_directory exists (if not create it)
             if not os.path.exists(product_dirpath): 
@@ -902,7 +917,7 @@ def download(
             if logger: logger.info(f"*{count_msg} Starting: {file_name[0:-4]}")
 
             # Defining the download URL
-            file_download_url = row['atom:link[rel="enclosure"]']
+            file_download_url = row['download_url']
 
             for attempt in range(MAX_DOWNLOAD_ATTEMPTS_PER_FILE):
                 if attempt > 0:
@@ -954,12 +969,12 @@ def download(
                         validate_request_response(file_download_response, logger=logger)
                         
                         with open(zip_file_path, "wb") as f:
-                            total_length = file_download_response.headers.get('content-length')
-                            if total_length is None:
+                            total_length_str = file_download_response.headers.get('content-length')
+                            if not isinstance(total_length_str, str):
                                 f.write(file_download_response.content)
                             else:
                                 current_length = 0
-                                total_length = int(total_length)
+                                total_length = int(total_length_str)
                                 start_time = time.time()
                                 progress_bar_length = 30
                                 for data in file_download_response.iter_content(chunk_size=CHUNK_SIZE_BYTES): 
@@ -1022,71 +1037,48 @@ def download(
 
     return download_counter, unzip_counter, mean_download_speed, total_download_size
 
-def get_product_search_template(collection_identifier: str,
-                                msg_prefix: str = '',
-                                logger: Logger | None = None) -> str | None:
-    """
-    Retrieves the OpenSearch URL template for a given OADS collection.
-
-    Args:
-        collection_identifier (str): Identifier of the OADS collection.
-        msg_prefix (str, optional): Prefix for log messages. Defaults to an empty string.
-        logger (Logger | None, optional): Logger instance for logging. Defaults to None.
-
-    Returns:
-        str: The search template for the specified collection.
-    """
-    if logger: logger.debug(f'{msg_prefix}Trying collection: {collection_identifier}')
-
-    opensearch_description_doc_url = 'https://eocat.esa.int/eo-catalogue/opensearch/description.xml'
-    opensearch_description_doc_response = requests.get(opensearch_description_doc_url)
-    validate_request_response(opensearch_description_doc_response, logger=logger)
-
-    root = ElementTree.fromstring(opensearch_description_doc_response.text)
-    root_opensearch_namespace = {'os': 'http://a9.com/-/spec/opensearch/1.1/'}
-    collection_url_atom = root.find('os:Url[@rel="collection"][@type="application/atom+xml"]', root_opensearch_namespace)
-    collection_template = collection_url_atom.attrib['template']
-    opensearch_querystring = {}
-    opensearch_querystring['geo:uid'] =  str(collection_identifier)
-    opensearch_request_url = get_api_request(collection_template, opensearch_querystring, msg_prefix=msg_prefix, logger=logger)
-    opensearch_response = requests.get(opensearch_request_url)
-    validate_request_response(opensearch_response, logger=logger)
-
-    # # Extract total results
-    # root = ElementTree.fromstring(opensearch_response.text)
-    # totalResults = root.find('{http://a9.com/-/spec/opensearch/1.1/}totalResults')
-    # if logger: logger.debug('totalResults: ', totalResults.text)
-
-    # Extracting granules (i.e. individual data files)
-    dataframe = response_to_dataframe(opensearch_response)
-    opensearch_description_doc_granules_url = dataframe.iat[0,3]
-
-    # Requesting granules
-    try:
-        granules_response = requests.get(opensearch_description_doc_granules_url, headers={'Accept': 'application/opensearchdescription+xml'})
-    except requests.exceptions.InvalidSchema as e:
-        if logger: logger.exception(e)
-        raise
-    except requests.exceptions.MissingSchema as e:
-        if logger:
-            logger.exception(e)
-            logger.error(f'Data collection {collection_identifier} does not seem to be searchable. Please try an alternative collection.')
-        return None
-    validate_request_response(granules_response, logger=logger)
-
-    # Retrieving the OpenSearch URL template for a product search request
-    root = ElementTree.fromstring(granules_response.text)
-    granules_url_atom = root.find('{http://a9.com/-/spec/opensearch/1.1/}Url[@rel="results"][@type="application/atom+xml"]')
-    template = granules_url_atom.attrib['template']
-    
-    return template
-
 def split_list_into_chunks(lst: list, size: int) -> list[list]:
     """Splits a list into chunks or sublists each containing at most N elements"""
     iterator = iter(lst)
     return [list(islice(iterator, size)) for _ in range((len(lst) + size - 1) // size)]
 
-def get_product_list(product_search_template: str,
+def encode_url(url: str) -> str:
+    """Encode the URL, including its query string."""
+    split_parsed_url = urlp.urlsplit(url)
+    encoded_query = urlp.quote(split_parsed_url.query, safe="=&,/:") # Keep separators
+    return urlp.urlunsplit((
+        split_parsed_url.scheme,
+        split_parsed_url.netloc,
+        split_parsed_url.path,
+        encoded_query,
+        split_parsed_url.fragment
+    ))
+
+def get_df(
+    url_product_search_query: str,
+    logger: Logger | None = None,
+) -> pd.DataFrame:
+    """Performs given search request and returns results as `pandas.Dataframe`."""
+    # Ensures that URL is properly encoded
+    url_product_search_query = url_product_search_query.replace('[', '{').replace(']', '}')
+    url_product_search_query = encode_url(url_product_search_query)
+
+    # Performs the request
+    response = get_request(url_product_search_query, logger=logger)
+    data_product_search_query = json.loads(response.text)
+
+    # Creates dataframe from result
+    data = []
+    for d in data_product_search_query['features']:
+        id = d['id']
+        server = urlp.urlparse(d['assets']['enclosure']['href']).netloc
+        download_url = d['assets']['enclosure']['href']
+        data.append((id, server, download_url))
+
+    df = pd.DataFrame(data, columns=['id', 'server', 'download_url'])
+    return df
+
+def get_product_list_json(url_items: str,
                      product_id_text: str | None = None,
                      sort_by_text: str | None = None,
                      num_results_text: str | None = "1000",
@@ -1107,10 +1099,10 @@ def get_product_list(product_search_template: str,
                      msg_prefix: str | None = '',
                      logger: Logger | None = None) -> pd.DataFrame:
     """
-    Performs a product search using given URL template and returns dataframe of products based on given search criteria.
+    Performs a product search based on given search criteria.
 
     Args:
-        product_search_template (str): Search query template for EO-CAT.
+        url_items (str): Base items URL that gets extended by other given search parameters.
         msg_prefix (str, optional): Prefix for log messages. Defaults to an empty string.
         logger (Logger | None, optional): Logger instance for logging. Defaults to None.
 
@@ -1118,39 +1110,34 @@ def get_product_list(product_search_template: str,
         pd.DataFrame: DataFrame containing found products.
     """
     # Define the OpenSearch request parameters
-    request_parameters = {}
-    if num_results_text: request_parameters['count'] = num_results_text
-    if end_time_text: request_parameters['time:end'] = end_time_text
-    if poi_text: request_parameters['geo:geometry'] = poi_text
-    if bbox_text: request_parameters['geo:box'] = bbox_text
-    if start_time_text: request_parameters['time:start'] = start_time_text
-    if product_id_text: request_parameters['geo:uid'] = product_id_text
-    if sort_by_text: request_parameters['sru:sortKeys'] = sort_by_text
-    if illum_angle_text: request_parameters['eo:illuminationElevationAngle'] = illum_angle_text
-    if frame_text: request_parameters['eo:frame'] = frame_text
-    if orbit_number_text: request_parameters['eo:orbitNumber'] = orbit_number_text
-    if instrument_text: request_parameters['eo:instrument'] = instrument_text
-    if productType_text: request_parameters['eo:productType'] = productType_text
-    if productVersion_text: request_parameters['eo:productVersion'] = productVersion_text
-    if orbitDirection_text: request_parameters['eo:orbitDirection'] = orbitDirection_text
-    if radius_text: request_parameters['geo:radius'] = radius_text
-    if lat_text: request_parameters['geo:lat'] = lat_text
-    if lon_text: request_parameters['geo:lon'] = lon_text
+    request_parameters = ""
+    if num_results_text: request_parameters += f"&limit={num_results_text}"
+    if poi_text: request_parameters += f"&geometry={poi_text}"
+    if bbox_text: request_parameters += f"&bbox={bbox_text}"
+    if start_time_text and end_time_text:
+        request_parameters += f"&datetime={start_time_text}/{end_time_text}"
+    elif start_time_text:
+        request_parameters += f"&datetime={start_time_text}/"
+    elif end_time_text:
+        request_parameters += f"&datetime=/{end_time_text}"
+    if product_id_text: request_parameters += f"&uid={product_id_text}"
+    if sort_by_text: request_parameters += f"&sortKeys={sort_by_text}"
+    if illum_angle_text: request_parameters += f"&illuminationElevationAngle={illum_angle_text}"
+    if frame_text: request_parameters += f"&frame={frame_text}"
+    if orbit_number_text: request_parameters += f"&orbitNumber={orbit_number_text}"
+    if instrument_text: request_parameters += f"&instrument={instrument_text}"
+    if productType_text: request_parameters += f"&productType={productType_text}"
+    if productVersion_text: request_parameters += f"&productVersion={productVersion_text}"
+    if orbitDirection_text: request_parameters += f"&orbitDirection={orbitDirection_text}"
+    if radius_text: request_parameters += f"&radius={radius_text}"
+    if lat_text: request_parameters += f"&lat={lat_text}"
+    if lon_text: request_parameters += f"&lon={lon_text}"
 
-    # Create request URL for product search on EO-CAT
-    request_url = get_api_request(product_search_template, request_parameters, msg_prefix=msg_prefix, logger=logger)
-
-    # Perform request
-    response = requests.get(request_url)
-    validate_request_response(response, logger=logger)
-
-    # # Extract total results
-    # root = ElementTree.fromstring(response.text)
-    # totalResults = root.find('{http://a9.com/-/spec/opensearch/1.1/}totalResults')
-    # if logger: logger.debug('totalResults: ', totalResults.text)
+    request_url = f"{url_items}?{request_parameters}"
+    if logger: logger.debug(f"Constructed search request URL: {request_url}")
 
     # Extract the results into a dataframe 
-    dataframe = response_to_dataframe(response)
+    dataframe = get_df(request_url, logger=logger)
 
     return dataframe
 
@@ -1342,7 +1329,7 @@ def get_time_queryparams(start_time: str | None,
                     raise
         return start_time_queryparam, end_time_queryparam, timestamp_queryparams
 
-def get_frame_queryparams(frame_ids: list[Frame] | None, logger: Logger = None) -> list[Frame] | None:
+def get_frame_queryparams(frame_ids: list[Frame] | None, logger: Logger | None = None) -> list[Frame] | None:
     """Convert user's frame ID input to query parameters, that can be used in search requests."""
     frame_id_queryparams = None
     if frame_ids is not None:
@@ -1356,23 +1343,20 @@ def get_orbit_queryparams(start_orbit_number: Orbit | None,
                           end_orbit_number: Orbit | None,
                           orbit_numbers: list[Orbit] | None,
                           logger: Logger | None = None) -> list[Orbit] | None:
-        """Convert user's orbit number inputs to query parameters, that can be used in search requests."""
-        orbit_number_queryparams = None
+    """Convert user's orbit number inputs to query parameters, that can be used in search requests."""
+    orbit_number_queryparams: list[Orbit] = []
 
-        if orbit_numbers is not None:
-            orbit_number_queryparams = orbit_numbers
-        orbit_number_range = get_validated_orbit_number_range(start_orbit_number, end_orbit_number, logger=logger)
+    if isinstance(orbit_numbers, list):
+        orbit_number_queryparams = [int(x) for x in np.append(orbit_number_queryparams, orbit_numbers)]
 
-        if orbit_number_range is not None:
-            if orbit_number_queryparams is None:
-                orbit_number_queryparams = orbit_number_range
-            else:
-                orbit_number_queryparams = np.append(orbit_number_queryparams, orbit_number_range)
-        
-        if orbit_number_queryparams is not None:
-            orbit_number_queryparams = [int(o) for o in np.sort(orbit_number_queryparams)]
+    orbit_number_range = get_validated_orbit_number_range(start_orbit_number, end_orbit_number, logger=logger)
+    if isinstance(orbit_number_range, list):
+        orbit_number_queryparams = [int(x) for x in np.append(orbit_number_queryparams, orbit_number_range)]
 
-        return orbit_number_queryparams
+    if isinstance(orbit_number_queryparams, list):
+        orbit_number_queryparams = [int(x) for x in np.sort(np.unique(orbit_number_queryparams))]
+
+    return orbit_number_queryparams
 
 def get_radius_queryparams(radius_search: list[str] | None) -> tuple[str, str, str] | tuple[None, None, None]:
     """Convert user's radius inputs to query parameters, that can be used in search requests."""
@@ -1398,8 +1382,8 @@ def get_orbit_frame_tuple_list_from_separate_orbit_and_frame_lists(
             return None
         if frames is None or len(frames) == 0:
             frames = [f for f in FRAMES]
-        new_orbits = np.tile(orbits, len(frames)).tolist()
-        new_frames = np.repeat(frames, len(orbits)).tolist()
+        new_orbits = [int(x) for x in np.tile(orbits, len(frames))]
+        new_frames = [str(x) for x in np.repeat(frames, len(orbits))]
         return list(zip(new_orbits, new_frames))
 
 def get_orbit_frame_tuple_list_from_strings(start_orbit_and_frame: OrbitAndFrame | None,
@@ -1418,7 +1402,7 @@ def get_orbit_frame_tuple_list_from_strings(start_orbit_and_frame: OrbitAndFrame
             raise
         
         orbit_numbers = []
-        frame_ids = []
+        frame_ids: list[Frame] = []
         if start_orbit_and_frame is not None and end_orbit_and_frame is not None:
             start_orbit_number, start_frame_id = get_validated_orbit_and_frame(start_orbit_and_frame, logger=logger)
             end_orbit_number, end_frame_id = get_validated_orbit_and_frame(end_orbit_and_frame, logger=logger)
@@ -1443,8 +1427,9 @@ def get_orbit_frame_tuple_list_from_strings(start_orbit_and_frame: OrbitAndFrame
                             frame_ids.append(f)
 
         if orbit_and_frames is not None:
-            orbit_numbers_given, frame_ids_given = zip(*[get_validated_orbit_and_frame(oaf) for oaf in orbit_and_frames])
-            orbit_numbers_given, frame_ids_given = list(orbit_numbers_given), list(frame_ids_given)
+            oaf_tuple_list = [get_validated_orbit_and_frame(oaf) for oaf in orbit_and_frames]
+            orbit_numbers_given: list[Orbit] = [oaf[0] for oaf in oaf_tuple_list]
+            frame_ids_given: list[Frame] = [oaf[1] for oaf in oaf_tuple_list]
             orbit_numbers = orbit_numbers + orbit_numbers_given
             frame_ids = frame_ids + frame_ids_given
 
@@ -1469,9 +1454,9 @@ def create_list_of_search_requests(product_types: list[str],
                                    start_time_queryparam: str | None,
                                    end_time_queryparam: str | None,
                                    timestamp_queryparams: list[str] | None,
-                                   complete_orbits:list[Orbit] | None,
-                                   incomplete_orbits_frame_map: dict[Frame, Orbit] | None,
-                                   frame_ids: list[Orbit] | None) -> list[SearchRequest]:
+                                   complete_orbits: list[Orbit] | None,
+                                   incomplete_orbits_frame_map: dict[Frame, list[Orbit]] | None,
+                                   frame_ids: list[Frame] | None) -> list[SearchRequest]:
     """
     Creates a list of search requests based on product types, spatial and temporal 
     query parameters, and orbit/frame information.
@@ -1531,7 +1516,7 @@ def create_list_of_search_requests(product_types: list[str],
                     new_request = SearchRequest(**basic_product_queryparams,
                                                 **geo_location_queryparams,
                                                 **time_queryparams,
-                                                frame_id=frame_id)
+                                                frame_id=str(frame_id))
                 planned_requests.append(new_request)
             else:
                 new_request = SearchRequest(**basic_product_queryparams,
@@ -1588,8 +1573,9 @@ def main(
         logger=logger
     )
 
-    product_types, product_versions = zip(*[get_product_type_and_version_from_string(pn, logger=logger) for pn in product_types])
-    product_types, product_versions = list(product_types), list(product_versions)
+    type_version_tuples = [get_product_type_and_version_from_string(pn, logger=logger) for pn in product_types]
+    product_types = [x[0] for x in type_version_tuples]
+    product_versions = [x[1] for x in type_version_tuples]
     # If option '--product_version' is used, all products without explicitly specified baseline in its name (eg. ANOM:AC) will be set to this 
     if product_version is not None:
         product_versions = [product_version if pv == 'latest' else pv for pv in product_versions]
@@ -1692,9 +1678,12 @@ def main(
             if logger: logger.warning(f' {counter_msg} No collection was selected. Please make sure that you have added the appropriate collections for this product in the configuration file and that you are allowed to access to them.')
         
         for collection_identifier in collection_identifier_list:
-            template = get_product_search_template(collection_identifier, msg_prefix=f' {counter_msg} ', logger=logger)
-            if template is None: continue
-            dataframe = get_product_list(template,
+            try:
+                url_items = get_url_of_collection_items(collection_identifier, logger=logger)
+            except Exception as e:
+                if logger: logger.exception(e)
+                continue
+            dataframe = get_product_list_json(url_items,
                                         product_id_text=None,
                                         sort_by_text=None,
                                         num_results_text=str(int(MAX_NUM_RESULTS_PER_REQUEST)),
@@ -1714,7 +1703,7 @@ def main(
                                         lon_text=search_request.lon,
                                         msg_prefix=f' {counter_msg} ',
                                         logger=logger)
-            dataframe = drop_duplicate_files(dataframe, 'dc:identifier')
+            dataframe = drop_duplicate_files(dataframe, 'id')
             if logger: logger.info(f" {counter_msg} Files found in collection '{collection_identifier}': {len(dataframe)}")
             if len(dataframe) > 0:
                 dfs.append(dataframe)
@@ -1727,8 +1716,8 @@ def main(
     
     total_results = len(dataframe)
     if total_results > 0:
-        dataframe = drop_duplicate_files(dataframe, 'dc:identifier')
-        dataframe = dataframe.sort_values(by='dc:identifier')
+        dataframe = drop_duplicate_files(dataframe, 'id')
+        dataframe = dataframe.sort_values(by='id')
         if logger:
             console_exclusive_info()
             logger.info(f'List of files found (total number {total_results}):')
@@ -1737,7 +1726,7 @@ def main(
                 selected_index = dataframe.iloc[[selected_index]].index[0]
             except IndexError:
                 raise InvalidInputError(f"The index you selected exceeds the bounds of the found files list (1 - {total_results})")
-        for idx, file in enumerate(dataframe['dc:identifier'].to_numpy()):
+        for idx, file in enumerate(dataframe['id'].to_numpy()):
             if logger:
                 msg = f" [{str(idx+1).rjust(len(str(total_results)))}]  {file}"
                 if selected_index is not None and idx == selected_index:
@@ -1751,7 +1740,7 @@ def main(
                     if not is_debug: console_exclusive_info(msg)
                 logger.debug(msg)
         if is_found_files_list_to_txt:
-            dataframe['dc:identifier'].to_csv('results.txt', index=False, header=False)
+            dataframe['id'].to_csv('results.txt', index=False, header=False)
         else:
             logger.info(f"Note: To export this list use the option --export_results")
         if selected_index is not None:
