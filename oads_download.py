@@ -1791,7 +1791,8 @@ def main(
         logger.info(f"Files downloaded: {download_counter} ({size_msg} at ~{mean_download_speed:.2f} MB/s)")
         logger.info(f"Files unzipped:   {unzip_counter}")
 
-if __name__ == "__main__":
+def main_cli():
+    """Entry point for the command-line tool."""
     args = get_parsed_arguments()
 
     remove_old_logs(max_num_logs=MAX_NUM_LOGS, max_age_logs=MAX_AGE_LOGS)
@@ -1802,3 +1803,6 @@ if __name__ == "__main__":
     except Exception as e:
         logger.exception(e)
         raise
+
+if __name__ == "__main__":
+    main_cli()
