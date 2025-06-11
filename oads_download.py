@@ -7,8 +7,8 @@
 #
 __author__ = "Leonard König"
 __email__ = "koenig@tropos.de"
-__date__ = "2025-06-04"
-__version__ = "3.0.1"
+__date__ = "2025-06-11"
+__version__ = "3.0.2"
 __description__ = """This is a Python script designed to download EarthCARE satellite
 data from ESA's Online Access and Distribution System (OADS) using
 the OpenSearch API of the Earth Observation Catalogue (EO-CAT).
@@ -1769,6 +1769,12 @@ def get_radius_queryparams(
 def get_bbox_queryparam(bounding_box: list[str] | None) -> str | None:
     """Convert user's bounding box inputs to a query parameter, that can be used in search requests."""
     if bounding_box is not None:
+        bounding_box = [
+            bounding_box[1],  # min latitude
+            bounding_box[0],  # min longitude
+            bounding_box[3],  # max latitude
+            bounding_box[2],  # max longitude
+        ]
         return ",".join([str(float(x)) for x in bounding_box])
     return None
 
